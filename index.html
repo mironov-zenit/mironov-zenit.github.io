@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>3D Viewer</title>
+
+<!-- 🔑 ВАЖНО: импортная карта -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<style>
+body { margin: 0; overflow: hidden; }
+#info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: Arial;
+  z-index: 10;
+}
+</style>
+
+</head>
+<body>
+
+<div id="info">Загрузка...</div>
+
+<script type="module">
+
+import * as THREE from 'three';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/STLLoader.js';
+
+// =========================
+// 📥 читаем модель из URL
+// =========================
+
+const params = new URLSearchParams(window.location.search);
+let modelFile = params.get("model") || "default.stl";
+
+document.getElementById("info").innerText = modelFile;
+
+// =========================
+// 🎬 сцена
+// =========================
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  100000
+);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// свет
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
+
+// управление
+const controls = new OrbitControls(camera, renderer.domElement);
+
+// =========================
+// 📦 загрузка STL
+// =========================
+
+const loader = new STLLoader();
+const modelPath = modelFile;
+
+loader.load(modelPath, function (geometry) {
+
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x999999,
+    metalness: 0.1,
+    roughness: 0.8
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh);
+
+  // центрирование модели
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const center = box.getCenter(new THREE.Vector3());
+
+  mesh.position.sub(center);
+
+  camera.position.set(200, 200, 200);
+  camera.lookAt(0, 0, 0);
+
+}, undefined, function (error) {
+  console.error("Ошибка загрузки:", error);
+  document.getElementById("info").innerText = "Ошибка загрузки модели";
+});
+
+// =========================
+// 🔄 анимация
+// =========================
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// =========================
+// 📱 ресайз
+// =========================
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+
+</body>
+</html>
