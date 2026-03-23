@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <title>3D Viewer</title>
 
-<!-- 🔑 ВАЖНО: импортная карта -->
 <script type="importmap">
 {
   "imports": {
@@ -36,14 +35,14 @@ body { margin: 0; overflow: hidden; }
 
 import * as THREE from 'three';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/STLLoader.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
 // =========================
 // 📥 читаем модель из URL
 // =========================
 
 const params = new URLSearchParams(window.location.search);
-let modelFile = params.get("model") || "default.stl";
+let modelFile = params.get("model") || "default.glb";
 
 document.getElementById("info").innerText = modelFile;
 
@@ -63,43 +62,50 @@ const camera = new THREE.PerspectiveCamera(
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; // 🔥 важно для цветов
 document.body.appendChild(renderer.domElement);
 
 // свет
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2));
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
 
 // управление
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
 
 // =========================
-// 📦 загрузка STL
+// 📦 загрузка GLB
 // =========================
 
-const loader = new STLLoader();
-const modelPath = modelFile;
+const loader = new GLTFLoader();
+const modelPath = "models/" + modelFile;
 
-loader.load(modelPath, function (geometry) {
+loader.load(modelPath, function (gltf) {
 
-  geometry.computeVertexNormals();
+  const model = gltf.scene;
+  scene.add(model);
 
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x999999,
-    metalness: 0.1,
-    roughness: 0.8
-  });
-
-  const mesh = new THREE.Mesh(geometry, material);
-  scene.add(mesh);
-
-  // центрирование модели
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
+  // центрирование
+  const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
 
-  mesh.position.sub(center);
+  model.position.sub(center);
 
-  camera.position.set(200, 200, 200);
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  camera.position.set(
+    maxDim * 2,
+    maxDim * 2,
+    maxDim * 2
+  );
+
   camera.lookAt(0, 0, 0);
+
+  document.getElementById("info").innerText = modelFile;
 
 }, undefined, function (error) {
   console.error("Ошибка загрузки:", error);
