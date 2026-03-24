@@ -24,12 +24,22 @@ body { margin: 0; overflow: hidden; }
   font-family: Arial;
   z-index: 10;
 }
+
+/* 🔥 слайдер разреза */
+#clipSlider {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 200px;
+  z-index: 10;
+}
 </style>
 
 </head>
 <body>
 
 <div id="info">Загрузка...</div>
+<input type="range" id="clipSlider" min="-100" max="100" value="0">
 
 <script type="module">
 
@@ -62,7 +72,11 @@ const camera = new THREE.PerspectiveCamera(
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace; // 🔥 важно для цветов
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+// 🔥 включаем разрезы
+renderer.localClippingEnabled = true;
+
 document.body.appendChild(renderer.domElement);
 
 // свет
@@ -77,6 +91,18 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
 // =========================
+// ✂️ плоскость разреза
+// =========================
+
+const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+
+// слайдер
+const slider = document.getElementById("clipSlider");
+slider.addEventListener("input", (e) => {
+  plane.constant = e.target.value;
+});
+
+// =========================
 // 📦 загрузка GLB
 // =========================
 
@@ -87,6 +113,14 @@ loader.load(modelPath, function (gltf) {
 
   const model = gltf.scene;
   scene.add(model);
+
+  // 🔥 применяем разрез ко всем мешам
+  model.traverse((child) => {
+    if (child.isMesh) {
+      child.material.clippingPlanes = [plane];
+      child.material.clipShadows = true;
+    }
+  });
 
   // центрирование
   const box = new THREE.Box3().setFromObject(model);
