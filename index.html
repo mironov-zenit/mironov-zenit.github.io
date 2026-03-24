@@ -129,7 +129,13 @@ loader.load(modelPath, function (gltf) {
 
   model.position.sub(center);
 
-  const maxDim = Math.max(size.x, size.y, size.z);
+  const halfSize = maxDim / 2;
+
+// обновляем диапазон слайдера под модель
+slider.min = -halfSize;
+slider.max = halfSize;
+slider.step = maxDim / 200; // плавность
+slider.value = 0;
 
   camera.position.set(
     maxDim * 2,
