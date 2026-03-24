@@ -89,6 +89,7 @@ scene.add(dirLight);
 // управление
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.dampingFactor = 0.05;
 
 // =========================
 // ✂️ плоскость разреза
@@ -99,7 +100,7 @@ const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
 // слайдер
 const slider = document.getElementById("clipSlider");
 slider.addEventListener("input", (e) => {
-  plane.constant = e.target.value;
+  plane.constant = Number(e.target.value);
 });
 
 // =========================
@@ -129,14 +130,16 @@ loader.load(modelPath, function (gltf) {
 
   model.position.sub(center);
 
+  const maxDim = Math.max(size.x, size.y, size.z);
   const halfSize = maxDim / 2;
 
-// обновляем диапазон слайдера под модель
-slider.min = -halfSize;
-slider.max = halfSize;
-slider.step = maxDim / 200; // плавность
-slider.value = 0;
+  // 🔥 настраиваем слайдер под размер модели
+  slider.min = -halfSize;
+  slider.max = halfSize;
+  slider.step = maxDim / 200;
+  slider.value = 0;
 
+  // камера
   camera.position.set(
     maxDim * 2,
     maxDim * 2,
