@@ -14,6 +14,7 @@
 
 <style>
 body { margin: 0; overflow: hidden; }
+
 #info {
   position: absolute;
   top: 10px;
@@ -25,12 +26,58 @@ body { margin: 0; overflow: hidden; }
   z-index: 10;
 }
 
-/* 🔥 слайдер разреза */
+/* 🔥 большой слайдер */
 #clipSlider {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  width: 200px;
+  width: 80vw;
+  max-width: 400px;
+  height: 40px;
+  z-index: 10;
+}
+
+#clipSlider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: #ccc;
+}
+
+#clipSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #333;
+  margin-top: -10px;
+  cursor: pointer;
+}
+
+#clipSlider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: #ccc;
+}
+
+#clipSlider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #333;
+  cursor: pointer;
+}
+
+/* 🔁 кнопка инверсии */
+#invertBtn {
+  position: absolute;
+  bottom: 70px;
+  left: 20px;
+  padding: 10px 14px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-family: Arial;
+  cursor: pointer;
   z-index: 10;
 }
 </style>
@@ -39,6 +86,8 @@ body { margin: 0; overflow: hidden; }
 <body>
 
 <div id="info">Загрузка...</div>
+
+<button id="invertBtn">Инверсия</button>
 <input type="range" id="clipSlider" min="-100" max="100" value="0">
 
 <script type="module">
@@ -73,8 +122,6 @@ const camera = new THREE.PerspectiveCamera(
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-// 🔥 включаем разрезы
 renderer.localClippingEnabled = true;
 
 document.body.appendChild(renderer.domElement);
@@ -97,6 +144,16 @@ controls.dampingFactor = 0.05;
 
 const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
 
+// инверсия
+let inverted = false;
+const invertBtn = document.getElementById("invertBtn");
+
+invertBtn.addEventListener("click", () => {
+  plane.normal.multiplyScalar(-1);
+  plane.constant *= -1;
+  inverted = !inverted;
+});
+
 // слайдер
 const slider = document.getElementById("clipSlider");
 slider.addEventListener("input", (e) => {
@@ -115,7 +172,6 @@ loader.load(modelPath, function (gltf) {
   const model = gltf.scene;
   scene.add(model);
 
-  // 🔥 применяем разрез ко всем мешам
   model.traverse((child) => {
     if (child.isMesh) {
       child.material.clippingPlanes = [plane];
@@ -133,7 +189,7 @@ loader.load(modelPath, function (gltf) {
   const maxDim = Math.max(size.x, size.y, size.z);
   const halfSize = maxDim / 2;
 
-  // 🔥 настраиваем слайдер под размер модели
+  // настройка слайдера
   slider.min = -halfSize;
   slider.max = halfSize;
   slider.step = maxDim / 200;
