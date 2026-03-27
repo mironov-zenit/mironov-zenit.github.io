@@ -70,7 +70,7 @@ body { margin: 0; overflow: hidden; }
 /* 🔁 кнопка инверсии */
 #invertBtn {
   position: absolute;
-  bottom: 70px;
+  bottom: 80px;
   left: 20px;
   padding: 10px 14px;
   background: white;
@@ -80,12 +80,27 @@ body { margin: 0; overflow: hidden; }
   cursor: pointer;
   z-index: 10;
 }
+
+/* 📐 выбор плоскости */
+#planeSelect {
+  position: absolute;
+  bottom: 130px;
+  left: 20px;
+  padding: 8px;
+  z-index: 10;
+}
 </style>
 
 </head>
 <body>
 
 <div id="info">Загрузка...</div>
+
+<select id="planeSelect">
+  <option value="xy">XY</option>
+  <option value="xz">XZ</option>
+  <option value="yz">YZ</option>
+</select>
 
 <button id="invertBtn">Инверсия</button>
 <input type="range" id="clipSlider" min="-100" max="100" value="0">
@@ -144,17 +159,26 @@ controls.dampingFactor = 0.05;
 
 const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
 
-// инверсия
-let inverted = false;
+// 📐 выбор плоскости
+const planeSelect = document.getElementById("planeSelect");
+
+planeSelect.addEventListener("change", (e) => {
+  const val = e.target.value;
+
+  if (val === "xy") plane.normal.set(0, 0, 1); // режем по Z
+  if (val === "xz") plane.normal.set(0, 1, 0); // режем по Y
+  if (val === "yz") plane.normal.set(1, 0, 0); // режем по X
+});
+
+// 🔁 инверсия
 const invertBtn = document.getElementById("invertBtn");
 
 invertBtn.addEventListener("click", () => {
   plane.normal.multiplyScalar(-1);
   plane.constant *= -1;
-  inverted = !inverted;
 });
 
-// слайдер
+// 🎚 слайдер
 const slider = document.getElementById("clipSlider");
 slider.addEventListener("input", (e) => {
   plane.constant = Number(e.target.value);
@@ -179,7 +203,6 @@ loader.load(modelPath, function (gltf) {
     }
   });
 
-  // центрирование
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
@@ -189,13 +212,11 @@ loader.load(modelPath, function (gltf) {
   const maxDim = Math.max(size.x, size.y, size.z);
   const halfSize = maxDim / 2;
 
-  // настройка слайдера
   slider.min = -halfSize;
   slider.max = halfSize;
   slider.step = maxDim / 200;
   slider.value = 0;
 
-  // камера
   camera.position.set(
     maxDim * 2,
     maxDim * 2,
