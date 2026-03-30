@@ -26,68 +26,68 @@ body { margin: 0; overflow: hidden; }
   z-index: 10;
 }
 
-/* 🔥 большой слайдер */
-#clipSlider {
+/* 🎛️ общий контейнер управления */
+#controls {
   position: absolute;
   bottom: 20px;
-  left: 20px;
-  width: 80vw;
-  max-width: 400px;
-  height: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   z-index: 10;
 }
 
+/* 📐 селект */
+#planeSelect {
+  padding: 12px 16px;
+  font-size: 16px;
+}
+
+/* 🔁 кнопка */
+#invertBtn {
+  padding: 12px 20px;
+  font-size: 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+}
+
+/* 🔥 огромный слайдер */
+#clipSlider {
+  width: 90vw;
+  max-width: 500px;
+  height: 50px;
+}
+
 #clipSlider::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 4px;
+  height: 10px;
+  border-radius: 5px;
   background: #ccc;
 }
 
 #clipSlider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #333;
-  margin-top: -10px;
-  cursor: pointer;
+  margin-top: -11px;
 }
 
 #clipSlider::-moz-range-track {
-  height: 8px;
-  border-radius: 4px;
+  height: 10px;
+  border-radius: 5px;
   background: #ccc;
 }
 
 #clipSlider::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #333;
-  cursor: pointer;
-}
-
-/* 🔁 кнопка инверсии */
-#invertBtn {
-  position: absolute;
-  bottom: 80px;
-  left: 20px;
-  padding: 10px 14px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  font-family: Arial;
-  cursor: pointer;
-  z-index: 10;
-}
-
-/* 📐 выбор плоскости */
-#planeSelect {
-  position: absolute;
-  bottom: 130px;
-  left: 20px;
-  padding: 8px;
-  z-index: 10;
 }
 </style>
 
@@ -96,14 +96,18 @@ body { margin: 0; overflow: hidden; }
 
 <div id="info">Загрузка...</div>
 
-<select id="planeSelect">
-  <option value="xy">XY</option>
-  <option value="xz">XZ</option>
-  <option value="yz">YZ</option>
-</select>
+<!-- 🎛️ новый блок управления -->
+<div id="controls">
+  <select id="planeSelect">
+    <option value="xy">XY</option>
+    <option value="xz">XZ</option>
+    <option value="yz">YZ</option>
+  </select>
 
-<button id="invertBtn">Инверсия</button>
-<input type="range" id="clipSlider" min="-100" max="100" value="0">
+  <button id="invertBtn">Инверсия</button>
+
+  <input type="range" id="clipSlider" min="-100" max="100" value="0">
+</div>
 
 <script type="module">
 
@@ -111,28 +115,16 @@ import * as THREE from 'three';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-// =========================
-// 📥 читаем модель из URL
-// =========================
-
+// URL
 const params = new URLSearchParams(window.location.search);
 let modelFile = params.get("model") || "default.glb";
-
 document.getElementById("info").innerText = modelFile;
 
-// =========================
-// 🎬 сцена
-// =========================
-
+// сцена
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffffff);
 
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100000
-);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100000);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -145,7 +137,7 @@ document.body.appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-dirLight.position.set(5, 10, 7);
+dirLight.position.set(5,10,7);
 scene.add(dirLight);
 
 // управление
@@ -153,53 +145,47 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
-// =========================
-// ✂️ плоскость разреза
-// =========================
+// ✂️ плоскость (по умолчанию YZ)
+const plane = new THREE.Plane(new THREE.Vector3(1,0,0), 0);
 
-const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
-
-// 📐 выбор плоскости
+// 📐 UI
 const planeSelect = document.getElementById("planeSelect");
+const slider = document.getElementById("clipSlider");
 
-planeSelect.addEventListener("change", (e) => {
-  const val = e.target.value;
+// 🔥 фикс бага — синхронизация
+planeSelect.value = "yz";
 
-  if (val === "xy") plane.normal.set(0, 0, 1); // режем по Z
-  if (val === "xz") plane.normal.set(0, 1, 0); // режем по Y
-  if (val === "yz") plane.normal.set(1, 0, 0); // режем по X
+// смена плоскости
+planeSelect.addEventListener("change", (e)=>{
+  const v = e.target.value;
+
+  if (v === "xy") plane.normal.set(0,0,1);
+  if (v === "xz") plane.normal.set(0,1,0);
+  if (v === "yz") plane.normal.set(1,0,0);
 });
 
-// 🔁 инверсия
-const invertBtn = document.getElementById("invertBtn");
-
-invertBtn.addEventListener("click", () => {
+// инверсия
+document.getElementById("invertBtn").addEventListener("click", ()=>{
   plane.normal.multiplyScalar(-1);
   plane.constant *= -1;
 });
 
-// 🎚 слайдер
-const slider = document.getElementById("clipSlider");
-slider.addEventListener("input", (e) => {
+// слайдер
+slider.addEventListener("input", (e)=>{
   plane.constant = Number(e.target.value);
 });
 
-// =========================
-// 📦 загрузка GLB
-// =========================
-
+// загрузка
 const loader = new GLTFLoader();
-const modelPath = modelFile;
 
-loader.load(modelPath, function (gltf) {
+loader.load(modelFile, (gltf)=>{
 
   const model = gltf.scene;
   scene.add(model);
 
-  model.traverse((child) => {
-    if (child.isMesh) {
+  model.traverse((child)=>{
+    if (child.isMesh){
       child.material.clippingPlanes = [plane];
-      child.material.clipShadows = true;
     }
   });
 
@@ -209,46 +195,29 @@ loader.load(modelPath, function (gltf) {
 
   model.position.sub(center);
 
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const halfSize = maxDim / 2;
+  const maxDim = Math.max(size.x,size.y,size.z);
+  const halfSize = maxDim/2;
 
   slider.min = -halfSize;
   slider.max = halfSize;
-  slider.step = maxDim / 200;
-  slider.value = 0;
+  slider.step = maxDim/200;
 
-  camera.position.set(
-    maxDim * 2,
-    maxDim * 2,
-    maxDim * 2
-  );
+  camera.position.set(maxDim*2,maxDim*2,maxDim*2);
+  camera.lookAt(0,0,0);
 
-  camera.lookAt(0, 0, 0);
-
-  document.getElementById("info").innerText = modelFile;
-
-}, undefined, function (error) {
-  console.error("Ошибка загрузки:", error);
-  document.getElementById("info").innerText = "Ошибка загрузки модели";
 });
 
-// =========================
-// 🔄 анимация
-// =========================
-
-function animate() {
+// анимация
+function animate(){
   requestAnimationFrame(animate);
   controls.update();
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 animate();
 
-// =========================
-// 📱 ресайз
-// =========================
-
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+// ресайз
+window.addEventListener("resize", ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
