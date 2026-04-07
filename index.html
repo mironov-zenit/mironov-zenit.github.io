@@ -148,7 +148,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
 // ✂️ плоскость
-const plane = new THREE.Plane(new THREE.Vector3(1,0,0), 0);
+const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
 
 // UI
 const planeSelect = document.getElementById("planeSelect");
@@ -156,7 +156,7 @@ const slider = document.getElementById("clipSlider");
 const renderMode = document.getElementById("renderMode");
 
 // синхронизация
-planeSelect.value = "yz";
+planeSelect.value = "xy";
 
 // смена плоскости
 planeSelect.addEventListener("change", (e)=>{
