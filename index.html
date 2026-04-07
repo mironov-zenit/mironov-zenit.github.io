@@ -26,7 +26,7 @@ body { margin: 0; overflow: hidden; }
   z-index: 10;
 }
 
-/* 🎛️ панель */
+/* панель */
 #controls {
   position: absolute;
   bottom: 20px;
@@ -39,32 +39,16 @@ body { margin: 0; overflow: hidden; }
   z-index: 10;
 }
 
-/* селекты и кнопки */
-#planeSelect, #renderMode {
+#controls select,
+#controls button {
   padding: 10px;
   font-size: 16px;
 }
 
-#invertBtn {
-  padding: 10px 16px;
-  font-size: 16px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  background: white;
-  cursor: pointer;
-}
-
-/* слайдер */
 #clipSlider {
   width: 90vw;
   max-width: 500px;
   height: 50px;
-}
-
-#clipSlider::-webkit-slider-runnable-track {
-  height: 10px;
-  background: #ccc;
-  border-radius: 5px;
 }
 
 #clipSlider::-webkit-slider-thumb {
@@ -75,13 +59,6 @@ body { margin: 0; overflow: hidden; }
   border-radius: 50%;
   margin-top: -11px;
 }
-
-#clipSlider::-moz-range-thumb {
-  width: 32px;
-  height: 32px;
-  background: #333;
-  border-radius: 50%;
-}
 </style>
 
 </head>
@@ -90,6 +67,7 @@ body { margin: 0; overflow: hidden; }
 <div id="info">Загрузка...</div>
 
 <div id="controls">
+
   <select id="planeSelect">
     <option value="xy">XY</option>
     <option value="xz">XZ</option>
@@ -102,9 +80,20 @@ body { margin: 0; overflow: hidden; }
     <option value="wireframe">Каркас</option>
   </select>
 
+  <select id="cameraMode">
+    <option value="perspective">Перспектива</option>
+    <option value="ortho">Ортографическая</option>
+  </select>
+
+  <label>
+    <input type="checkbox" id="planeToggle">
+    Плоскость
+  </label>
+
   <button id="invertBtn">Инверсия</button>
 
   <input type="range" id="clipSlider">
+
 </div>
 
 <script type="module">
@@ -122,8 +111,21 @@ document.getElementById("info").innerText = modelFile;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffffff);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100000);
+// 📷 камеры
+let camera;
 
+const perspectiveCamera = new THREE.PerspectiveCamera(
+  75, window.innerWidth/window.innerHeight, 0.1, 100000
+);
+
+const aspect = window.innerWidth / window.innerHeight;
+const orthoCamera = new THREE.OrthographicCamera(
+  -200 * aspect, 200 * aspect, 200, -200, 0.1, 100000
+);
+
+camera = perspectiveCamera;
+
+// renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -131,16 +133,16 @@ renderer.localClippingEnabled = true;
 
 document.body.appendChild(renderer.domElement);
 
-// 💡 улучшенный свет
+// свет
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight1.position.set(5,10,7);
-scene.add(dirLight1);
+const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+dir1.position.set(5,10,7);
+scene.add(dir1);
 
-const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
-dirLight2.position.set(-5,-10,-7);
-scene.add(dirLight2);
+const dir2 = new THREE.DirectionalLight(0xffffff, 0.5);
+dir2.position.set(-5,-10,-7);
+scene.add(dir2);
 
 // управление
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -150,12 +152,25 @@ controls.dampingFactor = 0.05;
 // ✂️ плоскость
 const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
 
+// визуализация плоскости
+const planeMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(1000,1000),
+  new THREE.MeshBasicMaterial({
+    color: 0x00aaff,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.DoubleSide
+  })
+);
+planeMesh.visible = false;
+scene.add(planeMesh);
+
 // UI
 const planeSelect = document.getElementById("planeSelect");
 const slider = document.getElementById("clipSlider");
 const renderMode = document.getElementById("renderMode");
+const cameraMode = document.getElementById("cameraMode");
 
-// синхронизация
 planeSelect.value = "xy";
 
 // смена плоскости
@@ -178,6 +193,26 @@ slider.addEventListener("input", (e)=>{
   plane.constant = Number(e.target.value);
 });
 
+// камера переключение
+cameraMode.addEventListener("change", (e)=>{
+  const pos = camera.position.clone();
+
+  if (e.target.value === "ortho") {
+    camera = orthoCamera;
+  } else {
+    camera = perspectiveCamera;
+  }
+
+  camera.position.copy(pos);
+  controls.object = camera;
+  controls.update();
+});
+
+// плоскость toggle
+document.getElementById("planeToggle").addEventListener("change", (e)=>{
+  planeMesh.visible = e.target.checked;
+});
+
 // загрузка
 const loader = new GLTFLoader();
 
@@ -186,17 +221,14 @@ loader.load(modelFile, (gltf)=>{
   const model = gltf.scene;
   scene.add(model);
 
-  // список мешей
   const meshes = [];
 
   model.traverse((child)=>{
     if (child.isMesh){
 
       child.material.clippingPlanes = [plane];
-
       meshes.push(child);
 
-      // добавляем грани
       const edges = new THREE.EdgesGeometry(child.geometry);
       const line = new THREE.LineSegments(
         edges,
@@ -209,31 +241,25 @@ loader.load(modelFile, (gltf)=>{
     }
   });
 
-  // режим отображения
   renderMode.addEventListener("change", (e)=>{
     const mode = e.target.value;
 
-    meshes.forEach(mesh => {
-
+    meshes.forEach(mesh=>{
       if (mode === "solid") {
         mesh.material.wireframe = false;
-        if (mesh.userData.edgeLines) mesh.userData.edgeLines.visible = false;
+        mesh.userData.edgeLines.visible = false;
       }
-
       if (mode === "edges") {
         mesh.material.wireframe = false;
-        if (mesh.userData.edgeLines) mesh.userData.edgeLines.visible = true;
+        mesh.userData.edgeLines.visible = true;
       }
-
       if (mode === "wireframe") {
         mesh.material.wireframe = true;
-        if (mesh.userData.edgeLines) mesh.userData.edgeLines.visible = false;
+        mesh.userData.edgeLines.visible = false;
       }
-
     });
   });
 
-  // центрирование
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
@@ -246,7 +272,14 @@ loader.load(modelFile, (gltf)=>{
   slider.min = -halfSize;
   slider.max = halfSize;
   slider.step = maxDim/200;
-  slider.value = 0;
+
+  // обновление ортокамеры
+  const aspect = window.innerWidth / window.innerHeight;
+  orthoCamera.left = -maxDim * aspect;
+  orthoCamera.right = maxDim * aspect;
+  orthoCamera.top = maxDim;
+  orthoCamera.bottom = -maxDim;
+  orthoCamera.updateProjectionMatrix();
 
   camera.position.set(maxDim*2,maxDim*2,maxDim*2);
   camera.lookAt(0,0,0);
@@ -256,6 +289,11 @@ loader.load(modelFile, (gltf)=>{
 // анимация
 function animate(){
   requestAnimationFrame(animate);
+
+  // синхронизация визуальной плоскости
+  planeMesh.position.copy(plane.normal).multiplyScalar(-plane.constant);
+  planeMesh.lookAt(plane.normal);
+
   controls.update();
   renderer.render(scene,camera);
 }
@@ -263,8 +301,15 @@ animate();
 
 // ресайз
 window.addEventListener("resize", ()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
+  const aspect = window.innerWidth/window.innerHeight;
+
+  perspectiveCamera.aspect = aspect;
+  perspectiveCamera.updateProjectionMatrix();
+
+  orthoCamera.left = -200 * aspect;
+  orthoCamera.right = 200 * aspect;
+  orthoCamera.updateProjectionMatrix();
+
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
