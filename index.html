@@ -293,20 +293,47 @@ grid.visible = false;
 scene.add(grid);
 
 // ── Cameras ───────────────────────────────────────────────────────────────────
+// Используем ОДНУ камеру — perspCam — и переключаем тип проекции через матрицу.
+// Это решает проблему «вращение не работает в ortho»: OrbitControls всегда
+// управляет одним и тем же объектом, listeners не пересоздаются.
 const perspCam = new THREE.PerspectiveCamera(50, vw()/vh(), 0.01, 100000);
-const orthoCam = new THREE.OrthographicCamera(-1,1,1,-1,0.01,100000);
 let camera = perspCam;
 
-function updateOrthoFrustum() {
-  const aspect = vw()/vh();
-  const d = perspCam.position.distanceTo(controls.target)
-            * Math.tan(THREE.MathUtils.degToRad(perspCam.fov/2));
-  orthoCam.left=-d*aspect; orthoCam.right=d*aspect;
-  orthoCam.top=d; orthoCam.bottom=-d;
-  orthoCam.position.copy(perspCam.position);
-  orthoCam.quaternion.copy(perspCam.quaternion);
-  orthoCam.up.copy(perspCam.up);
-  orthoCam.updateProjectionMatrix();
+// Пересчитываем ортогональный frustum исходя из текущей дистанции до target.
+// Вызывается при переключении в ortho и при resize.
+function updateOrthoProjection() {
+  const dist   = perspCam.position.distanceTo(controls ? controls.target : new THREE.Vector3());
+  const halfH  = dist * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2));
+  const halfW  = halfH * (vw() / vh());
+  perspCam.left   = -halfW;
+  perspCam.right  =  halfW;
+  perspCam.top    =  halfH;
+  perspCam.bottom = -halfH;
+  perspCam.updateProjectionMatrix();
+}
+
+// Переключаем между перспективной и ортогональной проекцией одной камеры.
+function applyProjection() {
+  if (isOrtho) {
+    // Сохраняем fov чтобы восстановить потом
+    perspCam.userData.savedFov = perspCam.fov;
+    // Ортогональная проекция = очень маленький fov (~0) + пересчёт frustum.
+    // Three.js PerspectiveCamera умеет работать как ortho если установить
+    // left/right/top/bottom вручную и вызвать updateProjectionMatrix с правильной матрицей.
+    // Но проще: используем CameraHelper-совместимый способ через setViewOffset — нет,
+    // самый надёжный способ: просто строим ortho-матрицу вручную.
+    updateOrthoProjection();
+    // Подменяем projection matrix на ортогональную
+    const dist  = perspCam.position.distanceTo(controls.target);
+    const halfH = dist * Math.tan(THREE.MathUtils.degToRad(perspCam.userData.savedFov / 2));
+    const halfW = halfH * (vw() / vh());
+    perspCam.projectionMatrix.makeOrthographic(-halfW, halfW, halfH, -halfH, perspCam.near, perspCam.far);
+    perspCam.projectionMatrixInverse.copy(perspCam.projectionMatrix).invert();
+  } else {
+    // Восстанавливаем перспективную проекцию
+    if (perspCam.userData.savedFov) perspCam.fov = perspCam.userData.savedFov;
+    perspCam.updateProjectionMatrix();
+  }
 }
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
@@ -505,7 +532,7 @@ function animateCameraTo(targetPos, targetUp, onDone) {
     perspCam.lookAt(0, 0, 0);
     perspCam.updateProjectionMatrix();
 
-    if (isOrtho) updateOrthoFrustum();
+    if (isOrtho) applyProjection();
 
     controls.target.set(0, 0, 0);
 
@@ -516,7 +543,7 @@ function animateCameraTo(targetPos, targetUp, onDone) {
       perspCam.position.copy(toDir.clone().multiplyScalar(dist));
       perspCam.up.copy(targetUp);
       perspCam.lookAt(0, 0, 0);
-      if (isOrtho) updateOrthoFrustum();
+      if (isOrtho) applyProjection();
       controls.enabled = true;
       controls.update();
       cameraAnim = null;
@@ -542,6 +569,11 @@ function setCameraView(directionFromModel, upVector, viewName) {
   document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-view-' + viewName)?.classList.add('active');
   activeView = viewName;
+
+  // если сейчас ортогональная проекция — обновляем матрицу
+  // (это произойдёт автоматически в следующем кадре animate, но явный вызов
+  //  нужен чтобы не было одного кадра с неправильной проекцией)
+  if (isOrtho) applyProjection();
 
   animateCameraTo(targetPos, upVector, null);
 }
@@ -581,24 +613,11 @@ document.getElementById('btn-reset').addEventListener('click', () => {
 });
 
 // ── Ortho toggle ──────────────────────────────────────────────────────────────
-// НЕ пересоздаём OrbitControls — просто меняем controls.object.
-// Пересоздание сбрасывает pointer-listeners → вращение не работает до следующего
-// движения. Простая замена объекта решает проблему без side-эффектов.
+// Одна камера — просто меняем матрицу проекции. Controls не трогаем вообще.
 document.getElementById('btn-ortho').addEventListener('click', () => {
   isOrtho = !isOrtho;
   document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
-
-  if (isOrtho) {
-    updateOrthoFrustum();   // копирует position/quaternion/up из perspCam → orthoCam
-    camera = orthoCam;
-  } else {
-    camera = perspCam;      // perspCam актуален: updateOrthoFrustum не трогает его
-    camera.updateProjectionMatrix();
-  }
-
-  controls.object = camera;
-  controls.update();
-
+  applyProjection();
   setStatus(isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ', true);
 });
 
@@ -733,7 +752,8 @@ function loadModel(src) {
 // ── Animate ───────────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
-  if (isOrtho) updateOrthoFrustum();
+  // В ortho-режиме пересчитываем матрицу каждый кадр — при зуме дистанция меняется
+  if (isOrtho) applyProjection();
   if (planeMesh && clipActive) {
     planeMesh.position.copy(clipPlane.normal).multiplyScalar(-clipPlane.constant);
   }
@@ -746,7 +766,8 @@ animate();
 function onResize() {
   const w = vw(), h = vh();
   perspCam.aspect = w/h;
-  perspCam.updateProjectionMatrix();
+  if (!isOrtho) perspCam.updateProjectionMatrix();
+  else applyProjection();
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 }
