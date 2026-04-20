@@ -679,27 +679,34 @@ document.getElementById('btn-ortho').addEventListener('click', () => {
   isOrtho = !isOrtho;
   document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
 
+  // сохраняем состояние
+  const pos = camera.position.clone();
+  const quat = camera.quaternion.clone();
+  const target = controls.target.clone();
+
+  // переключаем камеру
+  camera = isOrtho ? orthoCam : perspCam;
+
+  // восстанавливаем состояние
+  camera.position.copy(pos);
+  camera.quaternion.copy(quat);
+
   if (isOrtho) {
-    // 🔁 копируем позицию и ориентацию
     updateOrthoFrustum();
-
-    orthoCam.position.copy(perspCam.position);
-    orthoCam.quaternion.copy(perspCam.quaternion);
-    orthoCam.updateProjectionMatrix();
-
-    camera = orthoCam;
-
   } else {
-    // 🔁 возвращаем обратно
-    perspCam.position.copy(orthoCam.position);
-    perspCam.quaternion.copy(orthoCam.quaternion);
-    perspCam.updateProjectionMatrix();
-
-    camera = perspCam;
+    camera.updateProjectionMatrix();
   }
 
-  // 🔥 ВАЖНО
-  controls.object = camera;
+  // 🔥 УБИВАЕМ старые контролы
+  controls.dispose();
+
+  // 🔥 СОЗДАЁМ заново
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+
+  // 🔥 ВОССТАНАВЛИВАЕМ target
+  controls.target.copy(target);
   controls.update();
 
   setStatus(
