@@ -564,7 +564,7 @@ rimLight.position.set(0, -10, -5);
 scene.add(rimLight);
 
 // ── Controls ──────────────────────────────────────────────────────────────────
-const controls = new OrbitControls(camera, renderer.domElement);
+let controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.zoomSpeed = 0.8;
