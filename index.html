@@ -675,13 +675,37 @@ document.getElementById('btn-reset').addEventListener('click', () => {
 });
 
 document.getElementById('btn-ortho').addEventListener('click', () => {
+
   isOrtho = !isOrtho;
   document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
-  if (isOrtho) updateOrthoFrustum();
-  camera = isOrtho ? orthoCam : perspCam;
+
+  if (isOrtho) {
+    // 🔁 копируем позицию и ориентацию
+    updateOrthoFrustum();
+
+    orthoCam.position.copy(perspCam.position);
+    orthoCam.quaternion.copy(perspCam.quaternion);
+    orthoCam.updateProjectionMatrix();
+
+    camera = orthoCam;
+
+  } else {
+    // 🔁 возвращаем обратно
+    perspCam.position.copy(orthoCam.position);
+    perspCam.quaternion.copy(orthoCam.quaternion);
+    perspCam.updateProjectionMatrix();
+
+    camera = perspCam;
+  }
+
+  // 🔥 ВАЖНО
   controls.object = camera;
   controls.update();
-  setStatus(isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ', true);
+
+  setStatus(
+    isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ',
+    true
+  );
 });
 
 document.getElementById('btn-grid').addEventListener('click', () => {
