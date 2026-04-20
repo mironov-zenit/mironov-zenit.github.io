@@ -1,9 +1,37 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3D Viewer</title>
 
+<!--
+  iOS Safari compatibility notes:
+  1. importmap — поддерживается только с iOS 16.4+. Для iOS <16.4 используем fallback
+     через legacy UMD сборку Three.js, подключённую обычным <script>.
+  2. OrbitControls / GLTFLoader — на iOS <16.4 тоже грузим UMD версии.
+  3. WebGL context — iOS Safari убивает контекст при уходе в фон (visibilitychange).
+     Нужно восстанавливать его явно.
+  4. backdrop-filter blur — поддерживается через -webkit-backdrop-filter.
+  5. touch-action — нужен на canvas чтобы OrbitControls получал touch-события.
+  6. iOS не позволяет autoplay аудио и некоторые WebGL расширения — не критично.
+  7. Размер canvas: на iOS window.innerHeight включает адресную строку — используем
+     visualViewport для точных размеров.
+-->
+<script>
+// Определяем поддержку importmap (iOS 16.4+, Safari 16.4+)
+window.__supportsImportMap = false;
+try {
+  const s = document.createElement('script');
+  s.type = 'importmap';
+  // Если браузер выбрасывает — не поддерживает
+  if (HTMLScriptElement.supports && HTMLScriptElement.supports('importmap')) {
+    window.__supportsImportMap = true;
+  }
+} catch(e) {}
+</script>
+
+<!-- importmap только для браузеров с поддержкой -->
 <script type="importmap">
 {
   "imports": {
@@ -13,73 +41,426 @@
 </script>
 
 <style>
-body { margin: 0; overflow: hidden; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-#info {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-family: Arial;
-  z-index: 10;
-}
+  :root {
+    --bg: #0d0d0f;
+    --panel: rgba(16,16,20,0.82);
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e6e0;
+    --muted: #7a7870;
+    --accent: #4f8ef7;
+    --accent2: #2dd4bf;
+    --danger: #f97316;
+    --radius: 10px;
+    --font: 'DM Mono', 'Fira Mono', monospace;
+  }
 
-#controls {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  z-index: 10;
-}
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: var(--font);
+    color: var(--text);
+  }
 
-#controls select,
-#controls button {
-  padding: 10px;
-  font-size: 16px;
-}
+  canvas { display: block; }
 
-#clipSlider {
-  width: 90vw;
-  max-width: 500px;
-  height: 50px;
-}
+  /* ── Overlay panels ── */
+  .panel {
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ── Top-left info ── */
+  #info {
+    top: 14px; left: 14px;
+    padding: 8px 14px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+  }
+  #info .model-name {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+  #info .dims { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
+
+  /* ── Status bar ── */
+  #status {
+    top: 14px; left: 50%; transform: translateX(-50%);
+    padding: 7px 18px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    white-space: nowrap;
+    transition: opacity 0.4s;
+  }
+  #status.hidden { opacity: 0; pointer-events: none; }
+
+  /* ── Top-right toolbar ── */
+  #toolbar {
+    top: 14px; right: 14px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tb-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tb-btn {
+    width: 36px; height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    font-family: var(--font);
+    flex-shrink: 0;
+  }
+  .tb-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .tb-btn.active { background: rgba(79,142,247,0.15); color: var(--accent); border-color: rgba(79,142,247,0.4); }
+  .tb-btn[title] { position: relative; }
+
+  .tb-sep { width: 1px; background: var(--border); margin: 4px 2px; }
+
+  /* ── Bottom controls ── */
+  #controls {
+    bottom: 20px; left: 50%; transform: translateX(-50%);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: min(560px, 92vw);
+    max-width: 640px;
+    width: 92vw;
+  }
+
+  #controls.disabled { opacity: 0.4; pointer-events: none; }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ctrl-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    min-width: 36px;
+    text-transform: uppercase;
+  }
+
+  /* Axis selector */
+  .axis-group {
+    display: flex;
+    gap: 4px;
+  }
+  .axis-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    transition: all 0.15s;
+  }
+  .axis-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .axis-btn.active { background: rgba(79,142,247,0.15); color: var(--accent); border-color: rgba(79,142,247,0.4); }
+
+  /* Slider */
+  .slider-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,142,247,0.25);
+    cursor: grab;
+    transition: box-shadow 0.15s;
+  }
+  input[type=range]:active::-webkit-slider-thumb { cursor: grabbing; box-shadow: 0 0 0 5px rgba(79,142,247,0.3); }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: grab;
+  }
+
+  .slider-val {
+    font-size: 10px;
+    color: var(--muted);
+    min-width: 44px;
+    text-align: right;
+    letter-spacing: 0.04em;
+  }
+
+  /* Render mode */
+  .mode-group {
+    display: flex;
+    gap: 4px;
+  }
+  .mode-btn {
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .mode-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .mode-btn.active { background: rgba(45,212,191,0.12); color: var(--accent2); border-color: rgba(45,212,191,0.35); }
+
+  /* Toggle switch */
+  .toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-track {
+    width: 28px; height: 16px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid var(--border);
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-track.on { background: rgba(79,142,247,0.5); border-color: rgba(79,142,247,0.6); }
+  .toggle-thumb {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+  }
+  .toggle-track.on .toggle-thumb { transform: translateX(12px); }
+  .toggle-label { font-size: 10px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+
+  /* Invert button */
+  .invert-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .invert-btn:hover { color: var(--danger); border-color: rgba(249,115,22,0.4); background: rgba(249,115,22,0.08); }
+
+  /* Progress bar */
+  #progress-wrap {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: transparent;
+    z-index: 100;
+    pointer-events: none;
+  }
+  #progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    width: 0%;
+    transition: width 0.1s;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    right: 50px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 10px;
+    color: var(--text);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    transform: translateY(-50%);
+    letter-spacing: 0.05em;
+  }
+
+  /* Error state */
+  #error {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: none;
+  }
+  #error .err-title { font-size: 14px; color: var(--danger); letter-spacing: 0.06em; margin-bottom: 8px; }
+  #error .err-sub { font-size: 11px; color: var(--muted); }
+
+  /* Drag-drop overlay */
+  #drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(13,13,15,0.88);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    border: 2px dashed rgba(79,142,247,0.4);
+    border-radius: 4px;
+  }
+  #drop-overlay.active { opacity: 1; pointer-events: all; }
+  #drop-overlay .drop-icon { font-size: 40px; }
+  #drop-overlay .drop-text { font-size: 13px; color: var(--accent); letter-spacing: 0.08em; }
+  #drop-overlay .drop-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+
+  /* Drag hint on start */
+  #drag-hint {
+    position: absolute;
+    bottom: 100px; left: 50%; transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    pointer-events: none;
+    opacity: 0;
+    animation: hint-fade 3s ease 1.5s forwards;
+  }
+  @keyframes hint-fade { 0%{opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
 </style>
-
 </head>
 <body>
 
-<div id="info">Загрузка...</div>
+<div id="progress-wrap"><div id="progress-bar"></div></div>
 
-<div id="controls">
+<!-- Info panel -->
+<div id="info" class="panel">
+  <span class="model-name" id="model-name">—</span>
+  <span class="dims" id="dims"></span>
+</div>
 
-  <select id="planeSelect">
-    <option value="xy">XY</option>
-    <option value="xz">XZ</option>
-    <option value="yz">YZ</option>
-  </select>
+<!-- Status -->
+<div id="status" class="panel">ЗАГРУЗКА...</div>
 
-  <select id="renderMode">
-    <option value="solid">Обычный</option>
-    <option value="edges">С гранями</option>
-    <option value="wireframe">Каркас</option>
-  </select>
+<!-- Toolbar (top-right) -->
+<div id="toolbar" class="panel">
+  <div class="tb-group">
+    <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
+    <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
+    <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
+  </div>
+</div>
 
-  <label>
-    <input type="checkbox" id="planeToggle">
-    Отобразить плоскость
-  </label>
+<!-- Bottom controls -->
+<div id="controls" class="panel disabled">
 
-  <button id="invertBtn">Инверсия</button>
+  <!-- Render mode -->
+  <div class="ctrl-row">
+    <span class="ctrl-label">Вид</span>
+    <div class="mode-group">
+      <button class="mode-btn active" data-mode="solid">Solid</button>
+      <button class="mode-btn" data-mode="edges">Рёбра</button>
+      <button class="mode-btn" data-mode="wireframe">Каркас</button>
+    </div>
+  </div>
 
-  <input type="range" id="clipSlider">
+  <!-- Clipping axis -->
+  <div class="ctrl-row">
+    <span class="ctrl-label">Срез</span>
+    <div class="axis-group">
+      <button class="axis-btn active" data-axis="none">Нет</button>
+      <button class="axis-btn" data-axis="xy">XY</button>
+      <button class="axis-btn" data-axis="xz">XZ</button>
+      <button class="axis-btn" data-axis="yz">YZ</button>
+    </div>
+    <button class="invert-btn" id="invertBtn">↔ Инверт</button>
+  </div>
+
+  <!-- Clip slider -->
+  <div class="ctrl-row" id="clip-row" style="display:none;">
+    <span class="ctrl-label">Позиция</span>
+    <div class="slider-wrap">
+      <input type="range" id="clipSlider">
+      <span class="slider-val" id="sliderVal">0.0</span>
+    </div>
+    <label class="toggle-wrap" id="planeToggle">
+      <div class="toggle-track" id="toggleTrack">
+        <div class="toggle-thumb"></div>
+      </div>
+      <span class="toggle-label">Плоскость</span>
+    </label>
+  </div>
 
 </div>
+
+<!-- Drag & drop overlay -->
+<div id="drop-overlay">
+  <div class="drop-icon">⬇</div>
+  <div class="drop-text">Перетащите GLB / GLTF файл</div>
+  <div class="drop-sub">Поддерживаются .glb и .gltf форматы</div>
+</div>
+
+<!-- Error -->
+<div id="error">
+  <div class="err-title">ОШИБКА ЗАГРУЗКИ</div>
+  <div class="err-sub" id="err-sub">Файл не найден или повреждён</div>
+</div>
+
+<div id="drag-hint">Перетащите .glb файл для загрузки</div>
 
 <script type="module">
 
@@ -87,177 +468,398 @@ import * as THREE from 'three';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-// URL
-const params = new URLSearchParams(window.location.search);
-let modelFile = params.get("model") || "default.glb";
-document.getElementById("info").innerText = modelFile;
+// ── State ───────────────────────────────────────────────────────────────────
+let meshes = [];
+let edgeObjects = [];
+let planeMesh = null;
+let modelBox = null;
+let defaultCameraPos = new THREE.Vector3();
+let defaultTarget = new THREE.Vector3();
+let isOrtho = false;
+let showPlaneVis = false;
+let clipActive = false;
+let inverted = false;
 
-// сцена
+// ── Scene ────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xffffff);
+scene.background = new THREE.Color(0x0d0d0f);
 
-// камера (только перспектива)
-const camera = new THREE.PerspectiveCamera(
-  75, window.innerWidth/window.innerHeight, 0.1, 100000
-);
+// Grid helper (floor)
+const grid = new THREE.GridHelper(100, 40, 0x1f1f2a, 0x1a1a22);
+grid.visible = false;
+scene.add(grid);
 
-// renderer
+// ── Cameras ──────────────────────────────────────────────────────────────────
+const perspCam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100000);
+const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100000);
+let camera = perspCam;
+
+function updateOrthoFrustum() {
+  const aspect = innerWidth / innerHeight;
+  const d = perspCam.position.distanceTo(controls.target) * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2));
+  orthoCam.left = -d * aspect; orthoCam.right = d * aspect;
+  orthoCam.top = d; orthoCam.bottom = -d;
+  orthoCam.position.copy(perspCam.position);
+  orthoCam.quaternion.copy(perspCam.quaternion);
+  orthoCam.updateProjectionMatrix();
+}
+
+// ── Renderer ─────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); // FIX: Retina support
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.localClippingEnabled = true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
 
-document.body.appendChild(renderer.domElement);
+// ── Lights ────────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
-// свет
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const keyLight = new THREE.DirectionalLight(0xfff4e0, 1.2);
+keyLight.position.set(8, 14, 10);
+scene.add(keyLight);
 
-const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
-dir1.position.set(5,10,7);
-scene.add(dir1);
+const fillLight = new THREE.DirectionalLight(0xc0d8ff, 0.4);
+fillLight.position.set(-8, -4, -8);
+scene.add(fillLight);
 
-const dir2 = new THREE.DirectionalLight(0xffffff, 0.5);
-dir2.position.set(-5,-10,-7);
-scene.add(dir2);
+const rimLight = new THREE.DirectionalLight(0x4f8ef7, 0.3);
+rimLight.position.set(0, -10, -5);
+scene.add(rimLight);
 
-// управление
+// ── Controls ──────────────────────────────────────────────────────────────────
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.zoomSpeed = 0.8;
 
-// ✂️ плоскость (по умолчанию XY)
-const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+// ── Clipping plane ────────────────────────────────────────────────────────────
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
-// 🔲 визуальная плоскость (пока пустая)
-let planeMesh = null;
+// ── UI elements ───────────────────────────────────────────────────────────────
+const progressBar = document.getElementById('progress-bar');
+const statusEl = document.getElementById('status');
+const modelNameEl = document.getElementById('model-name');
+const dimsEl = document.getElementById('dims');
+const controlsPanel = document.getElementById('controls');
+const clipSlider = document.getElementById('clipSlider');
+const sliderVal = document.getElementById('sliderVal');
+const clipRow = document.getElementById('clip-row');
+const toggleTrack = document.getElementById('toggleTrack');
+const errorEl = document.getElementById('error');
 
-// UI
-const planeSelect = document.getElementById("planeSelect");
-const slider = document.getElementById("clipSlider");
-const renderMode = document.getElementById("renderMode");
+function setStatus(msg, hide = false) {
+  statusEl.textContent = msg;
+  statusEl.classList.remove('hidden');
+  if (hide) setTimeout(() => statusEl.classList.add('hidden'), 1800);
+}
 
-planeSelect.value = "xy";
+// ── Axis buttons ──────────────────────────────────────────────────────────────
+const axisNormals = {
+  xy: new THREE.Vector3(0, 0, 1),
+  xz: new THREE.Vector3(0, 1, 0),
+  yz: new THREE.Vector3(1, 0, 0),
+};
 
-// смена плоскости
-planeSelect.addEventListener("change", (e)=>{
-  const v = e.target.value;
+document.querySelectorAll('.axis-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
 
-  if (v === "xy") plane.normal.set(0,0,1);
-  if (v === "xz") plane.normal.set(0,1,0);
-  if (v === "yz") plane.normal.set(1,0,0);
-});
+    const axis = btn.dataset.axis;
 
-// инверсия
-document.getElementById("invertBtn").addEventListener("click", ()=>{
-  plane.normal.multiplyScalar(-1);
-  plane.constant *= -1;
-});
-
-// слайдер
-slider.addEventListener("input", (e)=>{
-  plane.constant = Number(e.target.value);
-});
-
-// toggle плоскости
-document.getElementById("planeToggle").addEventListener("change", (e)=>{
-  if (planeMesh) planeMesh.visible = e.target.checked;
-});
-
-// загрузка
-const loader = new GLTFLoader();
-
-loader.load(modelFile, (gltf)=>{
-
-  const model = gltf.scene;
-  scene.add(model);
-
-  const meshes = [];
-
-  model.traverse((child)=>{
-    if (child.isMesh){
-
-      child.material.clippingPlanes = [plane];
-      meshes.push(child);
-
-      const edges = new THREE.EdgesGeometry(child.geometry);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0x000000 })
-      );
-
-      line.visible = false;
-      child.add(line);
-      child.userData.edgeLines = line;
+    if (axis === 'none') {
+      // Disable clipping
+      clipActive = false;
+      clipRow.style.display = 'none';
+      meshes.forEach(m => { m.material.clippingPlanes = []; });
+      edgeObjects.forEach(e => { e.material.clippingPlanes = []; }); // FIX: edges
+      if (planeMesh) planeMesh.visible = false;
+      return;
     }
+
+    // Enable clipping
+    clipActive = true;
+    clipRow.style.display = 'flex';
+    inverted = false;
+
+    // FIX: Reset plane + slider when axis changes
+    clipPlane.normal.copy(axisNormals[axis]);
+    clipPlane.constant = 0;
+    clipSlider.value = 0;
+    sliderVal.textContent = '0.0';
+
+    // Orient visual plane mesh
+    alignPlaneMesh(axis);
+
+    meshes.forEach(m => { m.material.clippingPlanes = [clipPlane]; });
+    edgeObjects.forEach(e => { e.material.clippingPlanes = [clipPlane]; }); // FIX: edges clip too
+    if (planeMesh) planeMesh.visible = showPlaneVis;
   });
-
-  renderMode.addEventListener("change", (e)=>{
-    const mode = e.target.value;
-
-    meshes.forEach(mesh=>{
-      mesh.material.wireframe = (mode === "wireframe");
-      if (mesh.userData.edgeLines)
-        mesh.userData.edgeLines.visible = (mode === "edges");
-    });
-  });
-
-  // 📦 размеры модели
-  const box = new THREE.Box3().setFromObject(model);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-
-  model.position.sub(center);
-
-  const maxDim = Math.max(size.x,size.y,size.z);
-  const halfSize = maxDim/2;
-
-  // 🔥 создаём ПРАВИЛЬНУЮ плоскость
-  const planeSize = maxDim * 1.2;
-
-  planeMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(planeSize, planeSize),
-    new THREE.MeshBasicMaterial({
-      color: 0x00aaff,
-      transparent: true,
-      opacity: 0.15,
-      side: THREE.DoubleSide
-    })
-  );
-
-  planeMesh.visible = false;
-  scene.add(planeMesh);
-
-  // слайдер
-  slider.min = -halfSize;
-  slider.max = halfSize;
-  slider.step = maxDim / 200;
-
-  camera.position.set(maxDim*2,maxDim*2,maxDim*2);
-  camera.lookAt(0,0,0);
-
 });
 
-// анимация
-function animate(){
+function alignPlaneMesh(axis) {
+  if (!planeMesh) return;
+  if (axis === 'xy') planeMesh.rotation.set(0, 0, 0);
+  if (axis === 'xz') planeMesh.rotation.set(Math.PI / 2, 0, 0);
+  if (axis === 'yz') planeMesh.rotation.set(0, Math.PI / 2, 0);
+}
+
+// ── Slider ────────────────────────────────────────────────────────────────────
+clipSlider.addEventListener('input', () => {
+  const v = Number(clipSlider.value);
+  clipPlane.constant = inverted ? -v : v; // FIX: respect inversion direction
+  sliderVal.textContent = v.toFixed(1);
+});
+
+// ── Invert ────────────────────────────────────────────────────────────────────
+// FIX: Proper inversion — flip the normal and negate constant, keep slider in sync
+document.getElementById('invertBtn').addEventListener('click', () => {
+  inverted = !inverted;
+  const v = Number(clipSlider.value);
+  clipPlane.normal.multiplyScalar(-1);
+  clipPlane.constant = inverted ? -v : v;
+});
+
+// ── Plane visibility toggle ───────────────────────────────────────────────────
+document.getElementById('planeToggle').addEventListener('click', () => {
+  showPlaneVis = !showPlaneVis;
+  toggleTrack.classList.toggle('on', showPlaneVis);
+  if (planeMesh) planeMesh.visible = showPlaneVis && clipActive;
+});
+
+// ── Render mode ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.dataset.mode;
+    meshes.forEach(m => {
+      m.material.wireframe = (mode === 'wireframe');
+    });
+    edgeObjects.forEach(e => { e.visible = (mode === 'edges'); });
+  });
+});
+
+// ── Toolbar buttons ───────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  perspCam.position.copy(defaultCameraPos);
+  controls.target.copy(defaultTarget);
+  controls.update();
+  setStatus('КАМЕРА СБРОШЕНА', true);
+});
+
+document.getElementById('btn-ortho').addEventListener('click', () => {
+  isOrtho = !isOrtho;
+  document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
+  if (isOrtho) updateOrthoFrustum();
+  camera = isOrtho ? orthoCam : perspCam;
+  controls.object = camera;
+  controls.update();
+  setStatus(isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ', true);
+});
+
+document.getElementById('btn-grid').addEventListener('click', () => {
+  grid.visible = !grid.visible;
+  document.getElementById('btn-grid').classList.toggle('active', grid.visible);
+});
+
+// ── Load model ────────────────────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const initialModel = params.get('model');
+
+if (initialModel) {
+  loadModel(initialModel);
+  document.getElementById('drag-hint').style.display = 'none';
+} else {
+  setStatus('ПЕРЕТАЩИТЕ .GLB ФАЙЛ', false);
+}
+
+function loadModel(src, isObjectURL = false) {
+  // Reset state
+  meshes.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
+  edgeObjects.forEach(e => { e.geometry.dispose(); e.material.dispose(); });
+  meshes = []; edgeObjects = [];
+
+  scene.children
+    .filter(c => c.type === 'Group' || c.userData.isModel)
+    .forEach(c => scene.remove(c));
+
+  if (planeMesh) { scene.remove(planeMesh); planeMesh = null; }
+
+  // Reset clipping UI
+  document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.axis-btn[data-axis="none"]').classList.add('active');
+  clipActive = false;
+  clipRow.style.display = 'none';
+
+  controlsPanel.classList.add('disabled');
+  errorEl.style.display = 'none';
+  progressBar.style.width = '0%';
+  setStatus('ЗАГРУЗКА...');
+
+  const nameEl = document.getElementById('model-name');
+  nameEl.textContent = src.split('/').pop().split('?')[0];
+
+  const loader = new GLTFLoader();
+
+  loader.load(
+    src,
+    (gltf) => {
+      const model = gltf.scene;
+      model.userData.isModel = true;
+      scene.add(model);
+
+      model.traverse(child => {
+        if (!child.isMesh) return;
+
+        // Ensure material supports clipping
+        if (!child.material.clippingPlanes) child.material.clippingPlanes = [];
+
+        meshes.push(child);
+
+        // FIX: Build edges lazily — only toggle visibility, don't recompute
+        const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
+        const edgesMat = new THREE.LineBasicMaterial({
+          color: 0x4f8ef7,
+          clippingPlanes: [],  // FIX: edges get clipping planes too
+          transparent: true,
+          opacity: 0.7
+        });
+        const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);
+        edgeLines.visible = false;
+        child.add(edgeLines);
+        child.userData.edgeLines = edgeLines;
+        edgeObjects.push(edgeLines);
+      });
+
+      // Fit camera
+      const box = new THREE.Box3().setFromObject(model);
+      modelBox = box;
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+
+      model.position.sub(center);
+
+      // Dims label
+      dimsEl.textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}`;
+
+      // Grid position
+      const bottom = box.min.y - center.y;
+      grid.position.y = bottom;
+
+      // Plane mesh
+      const planeSize = maxDim * 1.5;
+      planeMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(planeSize, planeSize),
+        new THREE.MeshBasicMaterial({
+          color: 0x4f8ef7,
+          transparent: true,
+          opacity: 0.12,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        })
+      );
+      planeMesh.visible = false;
+      scene.add(planeMesh);
+
+      // Slider range
+      const half = maxDim / 2;
+      clipSlider.min = -half;
+      clipSlider.max = half;
+      clipSlider.step = maxDim / 400;
+      clipSlider.value = 0;
+
+      // Camera
+      const dist = maxDim * 2.2;
+      defaultCameraPos.set(dist * 0.7, dist * 0.5, dist);
+      defaultTarget.copy(new THREE.Vector3(0, 0, 0));
+      perspCam.position.copy(defaultCameraPos);
+      perspCam.near = maxDim * 0.001;
+      perspCam.far = maxDim * 100;
+      perspCam.updateProjectionMatrix();
+      controls.target.copy(defaultTarget);
+      controls.update();
+
+      progressBar.style.width = '100%';
+      setTimeout(() => { progressBar.style.width = '0%'; }, 600);
+
+      controlsPanel.classList.remove('disabled');
+      setStatus('ГОТОВО', true);
+
+      if (isObjectURL) URL.revokeObjectURL(src);
+    },
+    (xhr) => {
+      if (xhr.total > 0) {
+        const pct = (xhr.loaded / xhr.total * 100).toFixed(0);
+        progressBar.style.width = pct + '%';
+        setStatus(`ЗАГРУЗКА ${pct}%`);
+      }
+    },
+    (err) => {
+      progressBar.style.width = '0%';
+      statusEl.classList.add('hidden');
+      errorEl.style.display = 'block';
+      document.getElementById('err-sub').textContent = err.message || 'Файл не найден или повреждён';
+      console.error(err);
+    }
+  );
+}
+
+// ── Drag & drop ───────────────────────────────────────────────────────────────
+const dropOverlay = document.getElementById('drop-overlay');
+
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dropOverlay.classList.add('active');
+});
+window.addEventListener('dragleave', (e) => {
+  if (!e.relatedTarget) dropOverlay.classList.remove('active');
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropOverlay.classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['glb', 'gltf'].includes(ext)) {
+    setStatus('ПОДДЕРЖИВАЮТСЯ ТОЛЬКО .GLB И .GLTF', false);
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  loadModel(url, true);
+  document.getElementById('model-name').textContent = file.name;
+});
+
+// ── Animate ───────────────────────────────────────────────────────────────────
+function animate() {
   requestAnimationFrame(animate);
 
-  if (planeMesh){
-    planeMesh.position.copy(plane.normal).multiplyScalar(-plane.constant);
-    planeMesh.lookAt(plane.normal);
+  // Sync ortho cam if active
+  if (isOrtho) updateOrthoFrustum();
+
+  // Move visual plane mesh to follow clip constant
+  if (planeMesh && clipActive) {
+    planeMesh.position.copy(clipPlane.normal).multiplyScalar(-clipPlane.constant);
   }
 
   controls.update();
-  renderer.render(scene,camera);
+  renderer.render(scene, camera);
 }
 animate();
 
-// ресайз
-window.addEventListener("resize", ()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+// ── Resize ────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  perspCam.aspect = innerWidth / innerHeight;
+  perspCam.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 });
 
 </script>
-
 </body>
 </html>
