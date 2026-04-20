@@ -374,6 +374,9 @@ try {
     <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
     <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
     <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
+    <button class="tb-btn" id="view-xy" title="Вид XY">XY</button>
+    <button class="tb-btn" id="view-xz" title="Вид XZ">XZ</button>
+    <button class="tb-btn" id="view-yz" title="Вид YZ">YZ</button>
   </div>
 </div>
 
@@ -570,6 +573,43 @@ controls.enablePan = true;
 controls.enableZoom = true;
 controls.enableRotate = true;
 
+function setOrthoView(axis) {
+  if (!modelBox) return;
+
+  const center = new THREE.Vector3(0, 0, 0);
+  const size = modelBox.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const dist = maxDim * 2;
+
+  let pos = new THREE.Vector3();
+  let up = new THREE.Vector3(0, 1, 0);
+
+  if (axis === 'xy') {
+    pos.set(0, 0, dist);
+    up.set(0, 1, 0);
+  }
+  if (axis === 'xz') {
+    pos.set(0, dist, 0);
+    up.set(0, 0, -1);
+  }
+  if (axis === 'yz') {
+    pos.set(dist, 0, 0);
+    up.set(0, 1, 0);
+  }
+
+  // если не в орто — включаем
+  if (!isOrtho) {
+    document.getElementById('btn-ortho').click();
+  }
+
+  camera.position.copy(pos);
+  camera.up.copy(up);
+  camera.lookAt(center);
+
+  controls.target.copy(center);
+  controls.update();
+}
+
 // ── Clipping plane ────────────────────────────────────────────────────────────
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
@@ -598,6 +638,9 @@ const axisNormals = {
   yz: new THREE.Vector3(1, 0, 0),
 };
 
+document.getElementById('view-xy').addEventListener('click', () => setOrthoView('xy'));
+document.getElementById('view-xz').addEventListener('click', () => setOrthoView('xz'));
+document.getElementById('view-yz').addEventListener('click', () => setOrthoView('yz'));
 document.querySelectorAll('.axis-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
