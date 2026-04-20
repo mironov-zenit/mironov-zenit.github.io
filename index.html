@@ -5,33 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>3D Viewer</title>
 
-<!--
-  iOS Safari compatibility notes:
-  1. importmap — поддерживается только с iOS 16.4+. Для iOS <16.4 используем fallback
-     через legacy UMD сборку Three.js, подключённую обычным <script>.
-  2. OrbitControls / GLTFLoader — на iOS <16.4 тоже грузим UMD версии.
-  3. WebGL context — iOS Safari убивает контекст при уходе в фон (visibilitychange).
-     Нужно восстанавливать его явно.
-  4. backdrop-filter blur — поддерживается через -webkit-backdrop-filter.
-  5. touch-action — нужен на canvas чтобы OrbitControls получал touch-события.
-  6. iOS не позволяет autoplay аудио и некоторые WebGL расширения — не критично.
-  7. Размер canvas: на iOS window.innerHeight включает адресную строку — используем
-     visualViewport для точных размеров.
--->
 <script>
-// Определяем поддержку importmap (iOS 16.4+, Safari 16.4+)
-window.__supportsImportMap = false;
-try {
-  const s = document.createElement('script');
-  s.type = 'importmap';
-  // Если браузер выбрасывает — не поддерживает
-  if (HTMLScriptElement.supports && HTMLScriptElement.supports('importmap')) {
-    window.__supportsImportMap = true;
-  }
-} catch(e) {}
+if (HTMLScriptElement.supports && HTMLScriptElement.supports('importmap')) {
+  window.__supportsImportMap = true;
+}
 </script>
 
-<!-- importmap только для браузеров с поддержкой -->
 <script type="importmap">
 {
   "imports": {
@@ -56,21 +35,10 @@ try {
     --font: 'DM Mono', 'Fira Mono', monospace;
   }
 
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: var(--bg);
-    font-family: var(--font);
-    color: var(--text);
-  }
+  body { margin: 0; overflow: hidden; background: var(--bg); font-family: var(--font); color: var(--text); }
 
-  canvas {
-    display: block;
-    touch-action: none;
-    -webkit-touch-callout: none;
-  }
+  canvas { display: block; touch-action: none; -webkit-touch-callout: none; }
 
-  /* ── Overlay panels ── */
   .panel {
     position: absolute;
     background: var(--panel);
@@ -80,310 +48,165 @@ try {
     -webkit-backdrop-filter: blur(12px);
   }
 
-  /* ── Top-left info ── */
   #info {
     top: 14px; left: 14px;
     padding: 8px 14px;
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 160px;
+    font-size: 11px; letter-spacing: 0.06em; color: var(--muted);
+    display: flex; flex-direction: column; gap: 2px; min-width: 160px;
   }
   #info .model-name {
-    font-size: 12px;
-    color: var(--text);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 220px;
+    font-size: 12px; color: var(--text); font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
   }
   #info .dims { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
 
-  /* ── Status bar ── */
   #status {
     top: 14px; left: 50%; transform: translateX(-50%);
-    padding: 7px 18px;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    color: var(--accent);
-    white-space: nowrap;
-    transition: opacity 0.4s;
+    padding: 7px 18px; font-size: 11px; letter-spacing: 0.08em;
+    color: var(--accent); white-space: nowrap; transition: opacity 0.4s;
   }
   #status.hidden { opacity: 0; pointer-events: none; }
 
-  /* ── Top-right toolbar ── */
-  #toolbar {
-    top: 14px; right: 14px;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .tb-group {
-    display: flex;
-    gap: 4px;
-  }
+  /* ── Toolbar ── */
+  #toolbar { top: 14px; right: 14px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .tb-group { display: flex; gap: 4px; }
+  .tb-divider { height: 1px; background: var(--border); margin: 2px 0; }
 
   .tb-btn {
     width: 36px; height: 36px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: transparent; color: var(--muted); cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-    font-family: var(--font);
-    flex-shrink: 0;
+    font-size: 12px; letter-spacing: 0.03em;
+    font-family: var(--font); flex-shrink: 0;
+    transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
   }
   .tb-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .tb-btn:active { transform: scale(0.93); }
   .tb-btn.active { background: rgba(79,142,247,0.15); color: var(--accent); border-color: rgba(79,142,247,0.4); }
-  .tb-btn[title] { position: relative; }
 
-  .tb-sep { width: 1px; background: var(--border); margin: 4px 2px; }
+  /* кнопки видов — accent2 чтобы не путать с ortho */
+  .tb-btn.view-btn { font-size: 10px; letter-spacing: 0.06em; }
+  .tb-btn.view-btn.active {
+    background: rgba(45,212,191,0.12);
+    color: var(--accent2);
+    border-color: rgba(45,212,191,0.35);
+  }
 
   /* ── Bottom controls ── */
   #controls {
     bottom: max(20px, env(safe-area-inset-bottom, 20px));
     left: 50%; transform: translateX(-50%);
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: min(560px, 92vw);
-    max-width: 640px;
-    width: 92vw;
+    padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
+    min-width: min(560px, 92vw); max-width: 640px; width: 92vw;
   }
-
   #controls.disabled { opacity: 0.4; pointer-events: none; }
 
-  .ctrl-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
+  .ctrl-row { display: flex; align-items: center; gap: 12px; }
+  .ctrl-label { font-size: 10px; letter-spacing: 0.1em; color: var(--muted); min-width: 36px; text-transform: uppercase; }
 
-  .ctrl-label {
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    min-width: 36px;
-    text-transform: uppercase;
-  }
-
-  /* Axis selector */
-  .axis-group {
-    display: flex;
-    gap: 4px;
-  }
+  .axis-group { display: flex; gap: 4px; }
   .axis-btn {
-    padding: 5px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-family: var(--font);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    transition: all 0.15s;
+    padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    font-family: var(--font); font-size: 11px; letter-spacing: 0.06em; transition: all 0.15s;
   }
   .axis-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
   .axis-btn.active { background: rgba(79,142,247,0.15); color: var(--accent); border-color: rgba(79,142,247,0.4); }
 
-  /* Slider */
-  .slider-wrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
+  .slider-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
   input[type=range] {
-    -webkit-appearance: none;
-    appearance: none;
-    flex: 1;
-    height: 3px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 3px; background: rgba(255,255,255,0.1);
+    border-radius: 2px; outline: none; cursor: pointer;
   }
   input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 3px rgba(79,142,247,0.25);
-    cursor: grab;
-    transition: box-shadow 0.15s;
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 0 3px rgba(79,142,247,0.25); cursor: grab;
   }
   input[type=range]:active::-webkit-slider-thumb { cursor: grabbing; box-shadow: 0 0 0 5px rgba(79,142,247,0.3); }
   input[type=range]::-moz-range-thumb {
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: none;
-    cursor: grab;
+    width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: none;
   }
+  .slider-val { font-size: 10px; color: var(--muted); min-width: 44px; text-align: right; letter-spacing: 0.04em; }
 
-  .slider-val {
-    font-size: 10px;
-    color: var(--muted);
-    min-width: 44px;
-    text-align: right;
-    letter-spacing: 0.04em;
-  }
-
-  /* Render mode */
-  .mode-group {
-    display: flex;
-    gap: 4px;
-  }
+  .mode-group { display: flex; gap: 4px; }
   .mode-btn {
-    padding: 5px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-family: var(--font);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: all 0.15s;
+    padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    font-family: var(--font); font-size: 10px; letter-spacing: 0.06em;
+    text-transform: uppercase; transition: all 0.15s;
   }
   .mode-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
   .mode-btn.active { background: rgba(45,212,191,0.12); color: var(--accent2); border-color: rgba(45,212,191,0.35); }
 
-  /* Toggle switch */
-  .toggle-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    user-select: none;
-  }
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
   .toggle-track {
-    width: 28px; height: 16px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.12);
-    border: 1px solid var(--border);
-    position: relative;
-    transition: background 0.2s;
-    flex-shrink: 0;
+    width: 28px; height: 16px; border-radius: 8px;
+    background: rgba(255,255,255,0.12); border: 1px solid var(--border);
+    position: relative; transition: background 0.2s; flex-shrink: 0;
   }
   .toggle-track.on { background: rgba(79,142,247,0.5); border-color: rgba(79,142,247,0.6); }
   .toggle-thumb {
-    position: absolute;
-    top: 2px; left: 2px;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.2s;
+    position: absolute; top: 2px; left: 2px; width: 10px; height: 10px;
+    border-radius: 50%; background: #fff; transition: transform 0.2s;
   }
   .toggle-track.on .toggle-thumb { transform: translateX(12px); }
   .toggle-label { font-size: 10px; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
 
-  /* Invert button */
   .invert-btn {
-    padding: 5px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-family: var(--font);
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: all 0.15s;
+    padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    font-family: var(--font); font-size: 10px; letter-spacing: 0.06em;
+    text-transform: uppercase; transition: all 0.15s;
   }
   .invert-btn:hover { color: var(--danger); border-color: rgba(249,115,22,0.4); background: rgba(249,115,22,0.08); }
 
-  /* Progress bar */
-  #progress-wrap {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: transparent;
-    z-index: 100;
-    pointer-events: none;
-  }
-  #progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    width: 0%;
-    transition: width 0.1s;
-  }
+  #progress-wrap { position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 100; pointer-events: none; }
+  #progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); width: 0%; transition: width 0.1s; }
 
-  /* Tooltip */
-  .tooltip {
-    position: absolute;
-    right: 50px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 10px;
-    color: var(--text);
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s;
-    transform: translateY(-50%);
-    letter-spacing: 0.05em;
-  }
-
-  /* Error state */
-  #error {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    display: none;
-  }
+  #error { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; }
   #error .err-title { font-size: 14px; color: var(--danger); letter-spacing: 0.06em; margin-bottom: 8px; }
   #error .err-sub { font-size: 11px; color: var(--muted); }
-
-
 </style>
 </head>
 <body>
 
 <div id="progress-wrap"><div id="progress-bar"></div></div>
 
-<!-- Info panel -->
 <div id="info" class="panel">
   <span class="model-name" id="model-name">—</span>
   <span class="dims" id="dims"></span>
 </div>
 
-<!-- Status -->
 <div id="status" class="panel">ЗАГРУЗКА...</div>
 
-<!-- Toolbar (top-right) -->
 <div id="toolbar" class="panel">
+
   <div class="tb-group">
     <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
     <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
     <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
-    <button class="tb-btn" id="view-xy" title="Вид XY">XY</button>
-    <button class="tb-btn" id="view-xz" title="Вид XZ">XZ</button>
-    <button class="tb-btn" id="view-yz" title="Вид YZ">YZ</button>
   </div>
+
+  <div class="tb-divider"></div>
+
+  <!--
+    Кнопки стандартных видов:
+    TOP   = сверху вниз, перпендикулярно плоскости XZ
+    FRT   = спереди,    перпендикулярно плоскости XY
+    RGT   = справа,     перпендикулярно плоскости YZ
+  -->
+  <div class="tb-group">
+    <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху — перпендикулярно XZ">TOP</button>
+    <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди — перпендикулярно XY">FRT</button>
+    <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа — перпендикулярно YZ">RGT</button>
+  </div>
+
 </div>
 
-<!-- Bottom controls -->
 <div id="controls" class="panel disabled">
 
-  <!-- Render mode -->
   <div class="ctrl-row">
     <span class="ctrl-label">Вид</span>
     <div class="mode-group">
@@ -393,7 +216,6 @@ try {
     </div>
   </div>
 
-  <!-- Clipping axis -->
   <div class="ctrl-row">
     <span class="ctrl-label">Срез</span>
     <div class="axis-group">
@@ -405,7 +227,6 @@ try {
     <button class="invert-btn" id="invertBtn">↔ Инверт</button>
   </div>
 
-  <!-- Clip slider -->
   <div class="ctrl-row" id="clip-row" style="display:none;">
     <span class="ctrl-label">Позиция</span>
     <div class="slider-wrap">
@@ -413,56 +234,39 @@ try {
       <span class="slider-val" id="sliderVal">0.0</span>
     </div>
     <label class="toggle-wrap" id="planeToggle">
-      <div class="toggle-track" id="toggleTrack">
-        <div class="toggle-thumb"></div>
-      </div>
+      <div class="toggle-track" id="toggleTrack"><div class="toggle-thumb"></div></div>
       <span class="toggle-label">Плоскость</span>
     </label>
   </div>
 
 </div>
 
-<!-- Error -->
 <div id="error">
   <div class="err-title">ОШИБКА ЗАГРУЗКИ</div>
   <div class="err-sub" id="err-sub">Файл не найден или повреждён</div>
 </div>
 
-<!-- UMD fallback для iOS < 16.4 (нет поддержки importmap) -->
 <script>
 (function() {
-  // Проверяем нужен ли fallback
   var needsFallback = !(HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'));
   if (!needsFallback) return;
-
-  // Загружаем UMD сборки синхронно через document.write (до DOMContentLoaded)
   var base = 'https://cdn.jsdelivr.net/npm/three@0.160.0/';
-  var scripts = [
-    base + 'build/three.min.js',
-    base + 'examples/js/controls/OrbitControls.js',
-    base + 'examples/js/loaders/GLTFLoader.js',
-  ];
-  scripts.forEach(function(src) {
-    document.write('<script src="' + src + '"><\/script>');
-  });
+  ['build/three.min.js','examples/js/controls/OrbitControls.js','examples/js/loaders/GLTFLoader.js']
+    .forEach(function(s) { document.write('<script src="'+base+s+'"><\/script>'); });
   window.__umdFallback = true;
 })();
 </script>
 
 <script type="module">
-// ── iOS / Safari compat: dynamic import с fallback на UMD globals ──────────
+
 let THREE, OrbitControls, GLTFLoader;
 
 if (window.__umdFallback) {
-  // UMD globals уже загружены через <script> выше
   THREE = window.THREE;
   OrbitControls = window.THREE.OrbitControls;
   GLTFLoader = window.THREE.GLTFLoader;
 } else {
-  // Нормальный ESM путь
-  const threeModule = await import('three');
-  THREE = threeModule;
-
+  THREE = await import('three');
   const [oc, gl] = await Promise.all([
     import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'),
     import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js'),
@@ -471,183 +275,83 @@ if (window.__umdFallback) {
   GLTFLoader = gl.GLTFLoader;
 }
 
-// ── Helpers: viewport size (iOS Safari учитывает адресную строку) ──────────
-function vw() {
-  return window.visualViewport ? window.visualViewport.width : window.innerWidth;
-}
-function vh() {
-  return window.visualViewport ? window.visualViewport.height : window.innerHeight;
-}
+const vw = () => window.visualViewport ? window.visualViewport.width  : window.innerWidth;
+const vh = () => window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
-// ── State ───────────────────────────────────────────────────────────────────
-let meshes = [];
-let edgeObjects = [];
-let planeMesh = null;
-let modelBox = null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let meshes = [], edgeObjects = [], planeMesh = null;
 let defaultCameraPos = new THREE.Vector3();
-let defaultTarget = new THREE.Vector3();
-let isOrtho = false;
-let showPlaneVis = false;
-let clipActive = false;
-let inverted = false;
+let defaultTarget    = new THREE.Vector3();
+let isOrtho = false, showPlaneVis = false, clipActive = false, inverted = false;
+let activeView = null;   // 'top' | 'front' | 'right' | null
 
-// ── Scene ────────────────────────────────────────────────────────────────────
+// ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d0d0f);
-
 const grid = new THREE.GridHelper(100, 40, 0x1f1f2a, 0x1a1a22);
-grid.visible = true;
+grid.visible = false;
 scene.add(grid);
 
-// ── Cameras ──────────────────────────────────────────────────────────────────
-const perspCam = new THREE.PerspectiveCamera(50, vw() / vh(), 0.01, 100000);
-const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100000);
+// ── Cameras ───────────────────────────────────────────────────────────────────
+const perspCam = new THREE.PerspectiveCamera(50, vw()/vh(), 0.01, 100000);
+const orthoCam = new THREE.OrthographicCamera(-1,1,1,-1,0.01,100000);
 let camera = perspCam;
 
 function updateOrthoFrustum() {
-  const aspect = vw() / vh();
-  const d = perspCam.position.distanceTo(controls.target) * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2));
-  orthoCam.left = -d * aspect; orthoCam.right = d * aspect;
-  orthoCam.top = d; orthoCam.bottom = -d;
+  const aspect = vw()/vh();
+  const d = perspCam.position.distanceTo(controls.target)
+            * Math.tan(THREE.MathUtils.degToRad(perspCam.fov/2));
+  orthoCam.left=-d*aspect; orthoCam.right=d*aspect;
+  orthoCam.top=d; orthoCam.bottom=-d;
   orthoCam.position.copy(perspCam.position);
   orthoCam.quaternion.copy(perspCam.quaternion);
+  orthoCam.up.copy(perspCam.up);
   orthoCam.updateProjectionMatrix();
 }
 
-// ── Renderer ─────────────────────────────────────────────────────────────────
-// iOS: powerPreference + failIfMajorPerformanceCaveat убраны — могут блокировать
-// создание контекста на старых устройствах
-const renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: false,
-  // iOS Safari: явно запрашиваем WebGL1 совместимость если WebGL2 недоступен
-  // Three.js r160 сам выбирает WebGL2 → WebGL1 → ошибка
-});
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setSize(vw(), vh());
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.localClippingEnabled = true;
 document.body.prepend(renderer.domElement);
 
-// ── iOS: восстановление WebGL контекста ──────────────────────────────────────
-// iOS Safari убивает WebGL контекст при уходе приложения в фон.
-// При возвращении нужно явно перезапустить рендер.
-renderer.domElement.addEventListener('webglcontextlost', (e) => {
-  e.preventDefault(); // обязательно — иначе контекст не восстановится
-  setStatus('КОНТЕКСТ ПОТЕРЯН...');
-}, false);
-
-renderer.domElement.addEventListener('webglcontextrestored', () => {
-  // Three.js r150+ восстанавливает контекст автоматически при наличии этого обработчика
-  setStatus('ВОССТАНОВЛЕНО', true);
-  animate();
-}, false);
-
-// При возвращении из фона на iOS — перерисовываем
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) renderer.render(scene, camera);
-});
+renderer.domElement.addEventListener('webglcontextlost',     (e) => { e.preventDefault(); setStatus('КОНТЕКСТ ПОТЕРЯН...'); }, false);
+renderer.domElement.addEventListener('webglcontextrestored', ()  => { setStatus('ВОССТАНОВЛЕНО', true); animate(); },          false);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) renderer.render(scene, camera); });
 
 // ── Lights ────────────────────────────────────────────────────────────────────
 scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-
-const keyLight = new THREE.DirectionalLight(0xfff4e0, 1.2);
-keyLight.position.set(8, 14, 10);
-scene.add(keyLight);
-
-const fillLight = new THREE.DirectionalLight(0xc0d8ff, 0.4);
-fillLight.position.set(-8, -4, -8);
-scene.add(fillLight);
-
-const rimLight = new THREE.DirectionalLight(0x4f8ef7, 0.3);
-rimLight.position.set(0, -10, -5);
-scene.add(rimLight);
+const keyLight = new THREE.DirectionalLight(0xfff4e0, 1.2); keyLight.position.set(8,14,10); scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xc0d8ff, 0.4); fillLight.position.set(-8,-4,-8); scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0x4f8ef7, 0.3); rimLight.position.set(0,-10,-5); scene.add(rimLight);
 
 // ── Controls ──────────────────────────────────────────────────────────────────
 let controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.zoomSpeed = 0.8;
-// iOS: OrbitControls использует pointer events — убеждаемся что они включены
-controls.enablePan = true;
-controls.enableZoom = true;
-controls.enableRotate = true;
 
-function setOrthoView(axis) {
-  if (!modelBox) return;
-
-  const center = new THREE.Vector3(0, 0, 0);
-  const size = modelBox.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const dist = maxDim * 2;
-
-  let pos = new THREE.Vector3();
-  let up = new THREE.Vector3(0, 1, 0);
-
-  if (axis === 'xy') {
-    pos.set(0, 0, dist);
-    up.set(0, 1, 0);
-  }
-  if (axis === 'xz') {
-    pos.set(0, dist, 0);
-    up.set(0, 0, -1);
-  }
-  if (axis === 'yz') {
-    pos.set(dist, 0, 0);
-    up.set(0, 1, 0);
-  }
-
-  // если не в орто — включаем
-  if (!isOrtho) {
-    document.getElementById('btn-ortho').click();
-  }
-
-  camera.position.copy(pos);
-  camera.up.copy(up);
-  camera.lookAt(center);
-
-  controls.target.copy(center);
-  controls.update();
+function clearActiveView() {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  activeView = null;
 }
+controls.addEventListener('start', clearActiveView);
 
-// ── Clipping plane ────────────────────────────────────────────────────────────
-const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-
-// ── UI elements ───────────────────────────────────────────────────────────────
-const progressBar = document.getElementById('progress-bar');
-const statusEl = document.getElementById('status');
-const modelNameEl = document.getElementById('model-name');
-const dimsEl = document.getElementById('dims');
-const controlsPanel = document.getElementById('controls');
-const clipSlider = document.getElementById('clipSlider');
-const sliderVal = document.getElementById('sliderVal');
-const clipRow = document.getElementById('clip-row');
-const toggleTrack = document.getElementById('toggleTrack');
-const errorEl = document.getElementById('error');
-
-function setStatus(msg, hide = false) {
-  statusEl.textContent = msg;
-  statusEl.classList.remove('hidden');
-  if (hide) setTimeout(() => statusEl.classList.add('hidden'), 1800);
-}
-
-// ── Axis buttons ──────────────────────────────────────────────────────────────
+// ── Clipping ──────────────────────────────────────────────────────────────────
+const clipPlane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
 const axisNormals = {
-  xy: new THREE.Vector3(0, 0, 1),
-  xz: new THREE.Vector3(0, 1, 0),
-  yz: new THREE.Vector3(1, 0, 0),
+  xy: new THREE.Vector3(0,0,1),
+  xz: new THREE.Vector3(0,1,0),
+  yz: new THREE.Vector3(1,0,0),
 };
 
-document.getElementById('view-xy').addEventListener('click', () => setOrthoView('xy'));
-document.getElementById('view-xz').addEventListener('click', () => setOrthoView('xz'));
-document.getElementById('view-yz').addEventListener('click', () => setOrthoView('yz'));
 document.querySelectorAll('.axis-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-
     const axis = btn.dataset.axis;
-
     if (axis === 'none') {
       clipActive = false;
       clipRow.style.display = 'none';
@@ -656,18 +360,14 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
       if (planeMesh) planeMesh.visible = false;
       return;
     }
-
     clipActive = true;
     clipRow.style.display = 'flex';
     inverted = false;
-
     clipPlane.normal.copy(axisNormals[axis]);
     clipPlane.constant = 0;
     clipSlider.value = 0;
     sliderVal.textContent = '0.0';
-
     alignPlaneMesh(axis);
-
     meshes.forEach(m => { m.material.clippingPlanes = [clipPlane]; });
     edgeObjects.forEach(e => { e.material.clippingPlanes = [clipPlane]; });
     if (planeMesh) planeMesh.visible = showPlaneVis;
@@ -676,10 +376,15 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
 
 function alignPlaneMesh(axis) {
   if (!planeMesh) return;
-  if (axis === 'xy') planeMesh.rotation.set(0, 0, 0);
-  if (axis === 'xz') planeMesh.rotation.set(Math.PI / 2, 0, 0);
-  if (axis === 'yz') planeMesh.rotation.set(0, Math.PI / 2, 0);
+  if (axis==='xy') planeMesh.rotation.set(0,0,0);
+  if (axis==='xz') planeMesh.rotation.set(Math.PI/2,0,0);
+  if (axis==='yz') planeMesh.rotation.set(0,Math.PI/2,0);
 }
+
+const clipSlider  = document.getElementById('clipSlider');
+const sliderVal   = document.getElementById('sliderVal');
+const clipRow     = document.getElementById('clip-row');
+const toggleTrack = document.getElementById('toggleTrack');
 
 clipSlider.addEventListener('input', () => {
   const v = Number(clipSlider.value);
@@ -700,72 +405,153 @@ document.getElementById('planeToggle').addEventListener('click', () => {
   if (planeMesh) planeMesh.visible = showPlaneVis && clipActive;
 });
 
+// ── Render mode ───────────────────────────────────────────────────────────────
 document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const mode = btn.dataset.mode;
-    meshes.forEach(m => { m.material.wireframe = (mode === 'wireframe'); });
-    edgeObjects.forEach(e => { e.visible = (mode === 'edges'); });
+    meshes.forEach(m => { m.material.wireframe = (mode==='wireframe'); });
+    edgeObjects.forEach(e => { e.visible = (mode==='edges'); });
   });
 });
 
-document.getElementById('btn-reset').addEventListener('click', () => {
-  perspCam.position.copy(defaultCameraPos);
-  controls.target.copy(defaultTarget);
-  controls.update();
-  setStatus('КАМЕРА СБРОШЕНА', true);
-});
+// ── Стандартные виды камеры ───────────────────────────────────────────────────
+//
+// Концепция: каждый вид — это позиция камеры на одной из осей мировых координат,
+// смотрящей в сторону origin (центра модели).
+//
+// Соответствие видов и плоскостей:
+//   TOP   → перпендикулярно плоскости XZ  (камера вдоль оси +Y, смотрит вниз)
+//   FRONT → перпендикулярно плоскости XY  (камера вдоль оси +Z, смотрит назад)
+//   RIGHT → перпендикулярно плоскости YZ  (камера вдоль оси +X, смотрит влево)
+//
+// Особенность TOP: когда камера смотрит строго вдоль Y,
+// вектор up=(0,1,0) совпадает с направлением взгляда → gimbal lock.
+// Решение: up=(0,0,-1), тогда «верх экрана» = -Z (как в большинстве CAD).
 
-document.getElementById('btn-ortho').addEventListener('click', () => {
+function setCameraView(directionFromModel, upVector, viewName) {
+  // Берём сохранённый bounding box (уже центрированный)
+  const box = perspCam.userData.modelBox;
+  if (!box) return;
 
-  isOrtho = !isOrtho;
-  document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
+  const size   = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const dist   = maxDim * 2.2;
 
-  // сохраняем состояние
-  const pos = camera.position.clone();
-  const quat = camera.quaternion.clone();
-  const target = controls.target.clone();
+  // target = центр модели = (0,0,0) после центрирования
+  const target = new THREE.Vector3(0, 0, 0);
+  const newPos = target.clone().addScaledVector(directionFromModel, dist);
 
-  // переключаем камеру
-  camera = isOrtho ? orthoCam : perspCam;
+  // обновляем perspCam (источник истины для позиции)
+  perspCam.position.copy(newPos);
+  perspCam.up.copy(upVector);
+  perspCam.lookAt(target);
+  perspCam.updateProjectionMatrix();
 
-  // восстанавливаем состояние
-  camera.position.copy(pos);
-  camera.quaternion.copy(quat);
-
-  if (isOrtho) {
-    updateOrthoFrustum();
-  } else {
-    camera.updateProjectionMatrix();
-  }
-
-  // 🔥 УБИВАЕМ старые контролы
-  controls.dispose();
-
-  // 🔥 СОЗДАЁМ заново
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-
-  // 🔥 ВОССТАНАВЛИВАЕМ target
+  // синхронизируем controls
   controls.target.copy(target);
   controls.update();
 
-  setStatus(
-    isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ',
-    true
+  // если сейчас ортогональная проекция — обновляем frustum
+  if (isOrtho) updateOrthoFrustum();
+
+  // подсвечиваем кнопку
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-view-' + viewName)?.classList.add('active');
+  activeView = viewName;
+}
+
+document.getElementById('btn-view-top').addEventListener('click', () => {
+  setCameraView(
+    new THREE.Vector3(0, 1, 0),    // камера над моделью (+Y)
+    new THREE.Vector3(0, 0, -1),   // верх экрана = -Z (CAD-конвенция, избегаем gimbal lock)
+    'top'
   );
+  setStatus('ВИД СВЕРХУ  ·  ⊥ XZ', true);
 });
 
+document.getElementById('btn-view-front').addEventListener('click', () => {
+  setCameraView(
+    new THREE.Vector3(0, 0, 1),    // камера перед моделью (+Z)
+    new THREE.Vector3(0, 1, 0),    // верх экрана = +Y
+    'front'
+  );
+  setStatus('ВИД СПЕРЕДИ  ·  ⊥ XY', true);
+});
+
+document.getElementById('btn-view-right').addEventListener('click', () => {
+  setCameraView(
+    new THREE.Vector3(1, 0, 0),    // камера справа (+X)
+    new THREE.Vector3(0, 1, 0),    // верх экрана = +Y
+    'right'
+  );
+  setStatus('ВИД СПРАВА  ·  ⊥ YZ', true);
+});
+
+// ── Сброс камеры ──────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  perspCam.position.copy(defaultCameraPos);
+  perspCam.up.set(0, 1, 0);
+  controls.target.copy(defaultTarget);
+  controls.update();
+  clearActiveView();
+  setStatus('КАМЕРА СБРОШЕНА', true);
+});
+
+// ── Ortho toggle ──────────────────────────────────────────────────────────────
+document.getElementById('btn-ortho').addEventListener('click', () => {
+  isOrtho = !isOrtho;
+  document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
+
+  const pos    = camera.position.clone();
+  const quat   = camera.quaternion.clone();
+  const up     = camera.up.clone();
+  const target = controls.target.clone();
+
+  camera = isOrtho ? orthoCam : perspCam;
+  camera.position.copy(pos);
+  camera.quaternion.copy(quat);
+  camera.up.copy(up);
+
+  if (isOrtho) updateOrthoFrustum();
+  else camera.updateProjectionMatrix();
+
+  controls.dispose();
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.zoomSpeed = 0.8;
+  controls.target.copy(target);
+  controls.update();
+  controls.addEventListener('start', clearActiveView);
+
+  setStatus(isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ', true);
+});
+
+// ── Grid ──────────────────────────────────────────────────────────────────────
 document.getElementById('btn-grid').addEventListener('click', () => {
   grid.visible = !grid.visible;
   document.getElementById('btn-grid').classList.toggle('active', grid.visible);
 });
 
-// ── Запуск ────────────────────────────────────────────────────────────────────
-const params = new URLSearchParams(location.search);
-const initialModel = params.get('model');
+// ── UI refs ───────────────────────────────────────────────────────────────────
+const progressBar   = document.getElementById('progress-bar');
+const statusEl      = document.getElementById('status');
+const dimsEl        = document.getElementById('dims');
+const controlsPanel = document.getElementById('controls');
+const errorEl       = document.getElementById('error');
+
+function setStatus(msg, hide=false) {
+  statusEl.textContent = msg;
+  statusEl.classList.remove('hidden');
+  if (hide) setTimeout(() => statusEl.classList.add('hidden'), 1800);
+}
+
+// ── Load model ────────────────────────────────────────────────────────────────
+const urlParams = new URLSearchParams(location.search);
+const initialModel = urlParams.get('model');
 
 if (initialModel) {
   loadModel(initialModel);
@@ -777,11 +563,7 @@ function loadModel(src) {
   meshes.forEach(m => { try { m.geometry.dispose(); m.material.dispose(); } catch(e){} });
   edgeObjects.forEach(e => { try { e.geometry.dispose(); e.material.dispose(); } catch(e){} });
   meshes = []; edgeObjects = [];
-
-  scene.children
-    .filter(c => c.userData.isModel)
-    .forEach(c => scene.remove(c));
-
+  scene.children.filter(c => c.userData.isModel).forEach(c => scene.remove(c));
   if (planeMesh) { scene.remove(planeMesh); planeMesh = null; }
 
   document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
@@ -793,12 +575,9 @@ function loadModel(src) {
   errorEl.style.display = 'none';
   progressBar.style.width = '0%';
   setStatus('ЗАГРУЗКА...');
-
   document.getElementById('model-name').textContent = src.split('/').pop().split('?')[0];
 
-  const loader = new GLTFLoader();
-
-  loader.load(
+  new GLTFLoader().load(
     src,
     (gltf) => {
       const model = gltf.scene;
@@ -807,77 +586,58 @@ function loadModel(src) {
 
       model.traverse(child => {
         if (!child.isMesh) return;
-
-        // iOS: некоторые материалы из GLTF могут использовать расширения,
-        // недоступные на iOS WebGL1. Делаем fallback на MeshStandardMaterial.
-        if (!child.material) {
-          child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
-        }
-
+        if (!child.material) child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
         if (!child.material.clippingPlanes) child.material.clippingPlanes = [];
-
         meshes.push(child);
-
-        const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
-        const edgesMat = new THREE.LineBasicMaterial({
-          color: 0x4f8ef7,
-          clippingPlanes: [],
-          transparent: true,
-          opacity: 0.7
-        });
-        const edgeLines = new THREE.LineSegments(edgesGeo, edgesMat);
-        edgeLines.visible = false;
-        child.add(edgeLines);
-        child.userData.edgeLines = edgeLines;
-        edgeObjects.push(edgeLines);
+        const el = new THREE.LineSegments(
+          new THREE.EdgesGeometry(child.geometry, 15),
+          new THREE.LineBasicMaterial({ color: 0x4f8ef7, clippingPlanes: [], transparent: true, opacity: 0.7 })
+        );
+        el.visible = false;
+        child.add(el);
+        edgeObjects.push(el);
       });
 
-      const box = new THREE.Box3().setFromObject(model);
-      modelBox = box;
+      const box    = new THREE.Box3().setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
+      const size   = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
 
       model.position.sub(center);
-
       dimsEl.textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}`;
+      grid.position.y = box.min.y - center.y;
 
-      const bottom = box.min.y - center.y;
-      grid.position.y = bottom;
+      // bounding box после центрирования — нужен setCameraView
+      perspCam.userData.modelBox = new THREE.Box3(
+        box.min.clone().sub(center),
+        box.max.clone().sub(center)
+      );
 
       const planeSize = maxDim * 1.5;
       planeMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(planeSize, planeSize),
-        new THREE.MeshBasicMaterial({
-          color: 0x4f8ef7,
-          transparent: true,
-          opacity: 0.12,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        })
+        new THREE.MeshBasicMaterial({ color: 0x4f8ef7, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false })
       );
       planeMesh.visible = false;
       scene.add(planeMesh);
 
       const half = maxDim / 2;
-      clipSlider.min = -half;
-      clipSlider.max = half;
-      clipSlider.step = maxDim / 400;
-      clipSlider.value = 0;
+      clipSlider.min = -half; clipSlider.max = half;
+      clipSlider.step = maxDim / 400; clipSlider.value = 0;
 
       const dist = maxDim * 2.2;
-      defaultCameraPos.set(dist * 0.7, dist * 0.5, dist);
+      defaultCameraPos.set(dist*0.7, dist*0.5, dist);
       defaultTarget.set(0, 0, 0);
       perspCam.position.copy(defaultCameraPos);
+      perspCam.up.set(0, 1, 0);
       perspCam.near = maxDim * 0.001;
-      perspCam.far = maxDim * 100;
+      perspCam.far  = maxDim * 100;
       perspCam.updateProjectionMatrix();
       controls.target.copy(defaultTarget);
       controls.update();
 
       progressBar.style.width = '100%';
       setTimeout(() => { progressBar.style.width = '0%'; }, 600);
-
       controlsPanel.classList.remove('disabled');
       setStatus('ГОТОВО', true);
     },
@@ -901,33 +661,25 @@ function loadModel(src) {
 // ── Animate ───────────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
-
   if (isOrtho) updateOrthoFrustum();
-
   if (planeMesh && clipActive) {
     planeMesh.position.copy(clipPlane.normal).multiplyScalar(-clipPlane.constant);
   }
-
   controls.update();
   renderer.render(scene, camera);
 }
 animate();
 
-// ── Resize (с поддержкой visualViewport на iOS) ────────────────────────────
+// ── Resize ────────────────────────────────────────────────────────────────────
 function onResize() {
   const w = vw(), h = vh();
-  perspCam.aspect = w / h;
+  perspCam.aspect = w/h;
   perspCam.updateProjectionMatrix();
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 }
-
 window.addEventListener('resize', onResize);
-
-// iOS: адресная строка появляется/скрывается — visualViewport меняет размер
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', onResize);
-}
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
 </script>
 </body>
