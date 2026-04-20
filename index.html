@@ -336,6 +336,9 @@ controls.zoomSpeed = 0.8;
 function clearActiveView() {
   document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
   activeView = null;
+  // Если пользователь начал вращать руками — отменяем анимацию
+  if (cameraAnim) { cameraAnim.cancelled = true; cameraAnim = null; }
+  controls.enabled = true;
 }
 controls.addEventListener('start', clearActiveView);
 
@@ -430,37 +433,117 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 // вектор up=(0,1,0) совпадает с направлением взгляда → gimbal lock.
 // Решение: up=(0,0,-1), тогда «верх экрана» = -Z (как в большинстве CAD).
 
+// ── Анимированный переход камеры ──────────────────────────────────────────────
+// Плавно перемещаем камеру из текущей позиции в целевую за ~600 мс.
+// Интерполируем:
+//   - позицию по сферической дуге (сохраняем расстояние до target)
+//   - вектор up через quaternion slerp
+// OrbitControls во время анимации временно отключаем чтобы damping
+// не конфликтовал с анимацией, и включаем обратно по завершении.
+
+let cameraAnim = null;   // дескриптор текущей анимации
+
+function animateCameraTo(targetPos, targetUp, onDone) {
+  // Отменяем предыдущую анимацию если она идёт
+  if (cameraAnim) { cameraAnim.cancelled = true; }
+
+  const anim = { cancelled: false };
+  cameraAnim = anim;
+
+  const DURATION = 550;   // мс
+  const startTime = performance.now();
+
+  // Стартовые значения берём из perspCam — он всегда источник истины
+  const fromPos = perspCam.position.clone();
+  const fromUp  = perspCam.up.clone();
+
+  // Строим кватернионы для slerp вектора up
+  // (используем вспомогательный объект Object3D чтобы не городить матрицы вручную)
+  const fromUpQ = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0), fromUp.clone().normalize()
+  );
+  const toUpQ = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0), targetUp.clone().normalize()
+  );
+
+  // Целевая дистанция (сохраняем текущую, чтобы не «прыгать» по зуму)
+  const dist = fromPos.length();   // target = (0,0,0) после центрирования
+
+  // Нормализованный целевой вектор направления
+  const toDir = targetPos.clone().normalize();
+
+  // Строим начальный и конечный quaternion для позиции (slerp по сфере)
+  const fromDir = fromPos.clone().normalize();
+  const posFromQ = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1), fromDir
+  );
+  const posToQ = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1), toDir
+  );
+
+  // Easing: плавный разгон и торможение
+  const ease = t => t < 0.5 ? 2*t*t : -1 + (4-2*t)*t;
+
+  controls.enabled = false;
+
+  function step() {
+    if (anim.cancelled) { controls.enabled = true; return; }
+
+    const elapsed = performance.now() - startTime;
+    const raw = Math.min(elapsed / DURATION, 1);
+    const t   = ease(raw);
+
+    // Интерполируем направление позиции по сфере
+    const interpDirQ = posFromQ.clone().slerp(posToQ, t);
+    const interpDir  = new THREE.Vector3(0, 0, 1).applyQuaternion(interpDirQ);
+    perspCam.position.copy(interpDir.multiplyScalar(dist));
+
+    // Интерполируем up
+    const interpUpQ = fromUpQ.clone().slerp(toUpQ, t);
+    perspCam.up.set(0, 1, 0).applyQuaternion(interpUpQ).normalize();
+
+    perspCam.lookAt(0, 0, 0);
+    perspCam.updateProjectionMatrix();
+
+    if (isOrtho) updateOrthoFrustum();
+
+    controls.target.set(0, 0, 0);
+
+    if (raw < 1) {
+      requestAnimationFrame(step);
+    } else {
+      // Анимация завершена — фиксируем точные конечные значения
+      perspCam.position.copy(toDir.clone().multiplyScalar(dist));
+      perspCam.up.copy(targetUp);
+      perspCam.lookAt(0, 0, 0);
+      if (isOrtho) updateOrthoFrustum();
+      controls.enabled = true;
+      controls.update();
+      cameraAnim = null;
+      if (onDone) onDone();
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
 function setCameraView(directionFromModel, upVector, viewName) {
-  // Берём сохранённый bounding box (уже центрированный)
   const box = perspCam.userData.modelBox;
   if (!box) return;
 
-  const size   = new THREE.Vector3();
+  const size = new THREE.Vector3();
   box.getSize(size);
   const maxDim = Math.max(size.x, size.y, size.z);
   const dist   = maxDim * 2.2;
 
-  // target = центр модели = (0,0,0) после центрирования
-  const target = new THREE.Vector3(0, 0, 0);
-  const newPos = target.clone().addScaledVector(directionFromModel, dist);
+  const targetPos = directionFromModel.clone().multiplyScalar(dist);
 
-  // обновляем perspCam (источник истины для позиции)
-  perspCam.position.copy(newPos);
-  perspCam.up.copy(upVector);
-  perspCam.lookAt(target);
-  perspCam.updateProjectionMatrix();
-
-  // синхронизируем controls
-  controls.target.copy(target);
-  controls.update();
-
-  // если сейчас ортогональная проекция — обновляем frustum
-  if (isOrtho) updateOrthoFrustum();
-
-  // подсвечиваем кнопку
+  // Подсвечиваем кнопку сразу
   document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('btn-view-' + viewName)?.classList.add('active');
   activeView = viewName;
+
+  animateCameraTo(targetPos, upVector, null);
 }
 
 document.getElementById('btn-view-top').addEventListener('click', () => {
@@ -492,40 +575,29 @@ document.getElementById('btn-view-right').addEventListener('click', () => {
 
 // ── Сброс камеры ──────────────────────────────────────────────────────────────
 document.getElementById('btn-reset').addEventListener('click', () => {
-  perspCam.position.copy(defaultCameraPos);
-  perspCam.up.set(0, 1, 0);
-  controls.target.copy(defaultTarget);
-  controls.update();
   clearActiveView();
+  animateCameraTo(defaultCameraPos, new THREE.Vector3(0, 1, 0), null);
   setStatus('КАМЕРА СБРОШЕНА', true);
 });
 
 // ── Ortho toggle ──────────────────────────────────────────────────────────────
+// НЕ пересоздаём OrbitControls — просто меняем controls.object.
+// Пересоздание сбрасывает pointer-listeners → вращение не работает до следующего
+// движения. Простая замена объекта решает проблему без side-эффектов.
 document.getElementById('btn-ortho').addEventListener('click', () => {
   isOrtho = !isOrtho;
   document.getElementById('btn-ortho').classList.toggle('active', isOrtho);
 
-  const pos    = camera.position.clone();
-  const quat   = camera.quaternion.clone();
-  const up     = camera.up.clone();
-  const target = controls.target.clone();
+  if (isOrtho) {
+    updateOrthoFrustum();   // копирует position/quaternion/up из perspCam → orthoCam
+    camera = orthoCam;
+  } else {
+    camera = perspCam;      // perspCam актуален: updateOrthoFrustum не трогает его
+    camera.updateProjectionMatrix();
+  }
 
-  camera = isOrtho ? orthoCam : perspCam;
-  camera.position.copy(pos);
-  camera.quaternion.copy(quat);
-  camera.up.copy(up);
-
-  if (isOrtho) updateOrthoFrustum();
-  else camera.updateProjectionMatrix();
-
-  controls.dispose();
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.zoomSpeed = 0.8;
-  controls.target.copy(target);
+  controls.object = camera;
   controls.update();
-  controls.addEventListener('start', clearActiveView);
 
   setStatus(isOrtho ? 'ОРТОГОНАЛЬНАЯ ПРОЕКЦИЯ' : 'ПЕРСПЕКТИВНАЯ ПРОЕКЦИЯ', true);
 });
