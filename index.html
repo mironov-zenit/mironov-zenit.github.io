@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>3D Viewer</title>
 
 <!--
@@ -64,7 +64,11 @@ try {
     color: var(--text);
   }
 
-  canvas { display: block; }
+  canvas {
+    display: block;
+    touch-action: none;
+    -webkit-touch-callout: none;
+  }
 
   /* ── Overlay panels ── */
   .panel {
@@ -146,7 +150,8 @@ try {
 
   /* ── Bottom controls ── */
   #controls {
-    bottom: 20px; left: 50%; transform: translateX(-50%);
+    bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    left: 50%; transform: translateX(-50%);
     padding: 16px 20px;
     display: flex;
     flex-direction: column;
@@ -347,40 +352,7 @@ try {
   #error .err-title { font-size: 14px; color: var(--danger); letter-spacing: 0.06em; margin-bottom: 8px; }
   #error .err-sub { font-size: 11px; color: var(--muted); }
 
-  /* Drag-drop overlay */
-  #drop-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(13,13,15,0.88);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    z-index: 200;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    border: 2px dashed rgba(79,142,247,0.4);
-    border-radius: 4px;
-  }
-  #drop-overlay.active { opacity: 1; pointer-events: all; }
-  #drop-overlay .drop-icon { font-size: 40px; }
-  #drop-overlay .drop-text { font-size: 13px; color: var(--accent); letter-spacing: 0.08em; }
-  #drop-overlay .drop-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
 
-  /* Drag hint on start */
-  #drag-hint {
-    position: absolute;
-    bottom: 100px; left: 50%; transform: translateX(-50%);
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-    pointer-events: none;
-    opacity: 0;
-    animation: hint-fade 3s ease 1.5s forwards;
-  }
-  @keyframes hint-fade { 0%{opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
 </style>
 </head>
 <body>
@@ -447,26 +419,62 @@ try {
 
 </div>
 
-<!-- Drag & drop overlay -->
-<div id="drop-overlay">
-  <div class="drop-icon">⬇</div>
-  <div class="drop-text">Перетащите GLB / GLTF файл</div>
-  <div class="drop-sub">Поддерживаются .glb и .gltf форматы</div>
-</div>
-
 <!-- Error -->
 <div id="error">
   <div class="err-title">ОШИБКА ЗАГРУЗКИ</div>
   <div class="err-sub" id="err-sub">Файл не найден или повреждён</div>
 </div>
 
-<div id="drag-hint">Перетащите .glb файл для загрузки</div>
+<!-- UMD fallback для iOS < 16.4 (нет поддержки importmap) -->
+<script>
+(function() {
+  // Проверяем нужен ли fallback
+  var needsFallback = !(HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'));
+  if (!needsFallback) return;
+
+  // Загружаем UMD сборки синхронно через document.write (до DOMContentLoaded)
+  var base = 'https://cdn.jsdelivr.net/npm/three@0.160.0/';
+  var scripts = [
+    base + 'build/three.min.js',
+    base + 'examples/js/controls/OrbitControls.js',
+    base + 'examples/js/loaders/GLTFLoader.js',
+  ];
+  scripts.forEach(function(src) {
+    document.write('<script src="' + src + '"><\/script>');
+  });
+  window.__umdFallback = true;
+})();
+</script>
 
 <script type="module">
+// ── iOS / Safari compat: dynamic import с fallback на UMD globals ──────────
+let THREE, OrbitControls, GLTFLoader;
 
-import * as THREE from 'three';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+if (window.__umdFallback) {
+  // UMD globals уже загружены через <script> выше
+  THREE = window.THREE;
+  OrbitControls = window.THREE.OrbitControls;
+  GLTFLoader = window.THREE.GLTFLoader;
+} else {
+  // Нормальный ESM путь
+  const threeModule = await import('three');
+  THREE = threeModule;
+
+  const [oc, gl] = await Promise.all([
+    import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js'),
+    import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js'),
+  ]);
+  OrbitControls = oc.OrbitControls;
+  GLTFLoader = gl.GLTFLoader;
+}
+
+// ── Helpers: viewport size (iOS Safari учитывает адресную строку) ──────────
+function vw() {
+  return window.visualViewport ? window.visualViewport.width : window.innerWidth;
+}
+function vh() {
+  return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+}
 
 // ── State ───────────────────────────────────────────────────────────────────
 let meshes = [];
@@ -484,18 +492,17 @@ let inverted = false;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d0d0f);
 
-// Grid helper (floor)
 const grid = new THREE.GridHelper(100, 40, 0x1f1f2a, 0x1a1a22);
 grid.visible = false;
 scene.add(grid);
 
 // ── Cameras ──────────────────────────────────────────────────────────────────
-const perspCam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100000);
+const perspCam = new THREE.PerspectiveCamera(50, vw() / vh(), 0.01, 100000);
 const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100000);
 let camera = perspCam;
 
 function updateOrthoFrustum() {
-  const aspect = innerWidth / innerHeight;
+  const aspect = vw() / vh();
   const d = perspCam.position.distanceTo(controls.target) * Math.tan(THREE.MathUtils.degToRad(perspCam.fov / 2));
   orthoCam.left = -d * aspect; orthoCam.right = d * aspect;
   orthoCam.top = d; orthoCam.bottom = -d;
@@ -505,14 +512,38 @@ function updateOrthoFrustum() {
 }
 
 // ── Renderer ─────────────────────────────────────────────────────────────────
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); // FIX: Retina support
+// iOS: powerPreference + failIfMajorPerformanceCaveat убраны — могут блокировать
+// создание контекста на старых устройствах
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: false,
+  // iOS Safari: явно запрашиваем WebGL1 совместимость если WebGL2 недоступен
+  // Three.js r160 сам выбирает WebGL2 → WebGL1 → ошибка
+});
+renderer.setSize(vw(), vh());
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.localClippingEnabled = true;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
+
+// ── iOS: восстановление WebGL контекста ──────────────────────────────────────
+// iOS Safari убивает WebGL контекст при уходе приложения в фон.
+// При возвращении нужно явно перезапустить рендер.
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault(); // обязательно — иначе контекст не восстановится
+  setStatus('КОНТЕКСТ ПОТЕРЯН...');
+}, false);
+
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  // Three.js r150+ восстанавливает контекст автоматически при наличии этого обработчика
+  setStatus('ВОССТАНОВЛЕНО', true);
+  animate();
+}, false);
+
+// При возвращении из фона на iOS — перерисовываем
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) renderer.render(scene, camera);
+});
 
 // ── Lights ────────────────────────────────────────────────────────────────────
 scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -534,6 +565,10 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.zoomSpeed = 0.8;
+// iOS: OrbitControls использует pointer events — убеждаемся что они включены
+controls.enablePan = true;
+controls.enableZoom = true;
+controls.enableRotate = true;
 
 // ── Clipping plane ────────────────────────────────────────────────────────────
 const clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -571,31 +606,27 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
     const axis = btn.dataset.axis;
 
     if (axis === 'none') {
-      // Disable clipping
       clipActive = false;
       clipRow.style.display = 'none';
       meshes.forEach(m => { m.material.clippingPlanes = []; });
-      edgeObjects.forEach(e => { e.material.clippingPlanes = []; }); // FIX: edges
+      edgeObjects.forEach(e => { e.material.clippingPlanes = []; });
       if (planeMesh) planeMesh.visible = false;
       return;
     }
 
-    // Enable clipping
     clipActive = true;
     clipRow.style.display = 'flex';
     inverted = false;
 
-    // FIX: Reset plane + slider when axis changes
     clipPlane.normal.copy(axisNormals[axis]);
     clipPlane.constant = 0;
     clipSlider.value = 0;
     sliderVal.textContent = '0.0';
 
-    // Orient visual plane mesh
     alignPlaneMesh(axis);
 
     meshes.forEach(m => { m.material.clippingPlanes = [clipPlane]; });
-    edgeObjects.forEach(e => { e.material.clippingPlanes = [clipPlane]; }); // FIX: edges clip too
+    edgeObjects.forEach(e => { e.material.clippingPlanes = [clipPlane]; });
     if (planeMesh) planeMesh.visible = showPlaneVis;
   });
 });
@@ -607,15 +638,12 @@ function alignPlaneMesh(axis) {
   if (axis === 'yz') planeMesh.rotation.set(0, Math.PI / 2, 0);
 }
 
-// ── Slider ────────────────────────────────────────────────────────────────────
 clipSlider.addEventListener('input', () => {
   const v = Number(clipSlider.value);
-  clipPlane.constant = inverted ? -v : v; // FIX: respect inversion direction
+  clipPlane.constant = inverted ? -v : v;
   sliderVal.textContent = v.toFixed(1);
 });
 
-// ── Invert ────────────────────────────────────────────────────────────────────
-// FIX: Proper inversion — flip the normal and negate constant, keep slider in sync
 document.getElementById('invertBtn').addEventListener('click', () => {
   inverted = !inverted;
   const v = Number(clipSlider.value);
@@ -623,27 +651,22 @@ document.getElementById('invertBtn').addEventListener('click', () => {
   clipPlane.constant = inverted ? -v : v;
 });
 
-// ── Plane visibility toggle ───────────────────────────────────────────────────
 document.getElementById('planeToggle').addEventListener('click', () => {
   showPlaneVis = !showPlaneVis;
   toggleTrack.classList.toggle('on', showPlaneVis);
   if (planeMesh) planeMesh.visible = showPlaneVis && clipActive;
 });
 
-// ── Render mode ───────────────────────────────────────────────────────────────
 document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const mode = btn.dataset.mode;
-    meshes.forEach(m => {
-      m.material.wireframe = (mode === 'wireframe');
-    });
+    meshes.forEach(m => { m.material.wireframe = (mode === 'wireframe'); });
     edgeObjects.forEach(e => { e.visible = (mode === 'edges'); });
   });
 });
 
-// ── Toolbar buttons ───────────────────────────────────────────────────────────
 document.getElementById('btn-reset').addEventListener('click', () => {
   perspCam.position.copy(defaultCameraPos);
   controls.target.copy(defaultTarget);
@@ -666,30 +689,27 @@ document.getElementById('btn-grid').addEventListener('click', () => {
   document.getElementById('btn-grid').classList.toggle('active', grid.visible);
 });
 
-// ── Load model ────────────────────────────────────────────────────────────────
+// ── Запуск ────────────────────────────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
 const initialModel = params.get('model');
 
 if (initialModel) {
   loadModel(initialModel);
-  document.getElementById('drag-hint').style.display = 'none';
 } else {
-  setStatus('ПЕРЕТАЩИТЕ .GLB ФАЙЛ', false);
+  setStatus('НЕТ МОДЕЛИ — ПРОВЕРЬТЕ QR-КОД');
 }
 
-function loadModel(src, isObjectURL = false) {
-  // Reset state
-  meshes.forEach(m => { m.geometry.dispose(); m.material.dispose(); });
-  edgeObjects.forEach(e => { e.geometry.dispose(); e.material.dispose(); });
+function loadModel(src) {
+  meshes.forEach(m => { try { m.geometry.dispose(); m.material.dispose(); } catch(e){} });
+  edgeObjects.forEach(e => { try { e.geometry.dispose(); e.material.dispose(); } catch(e){} });
   meshes = []; edgeObjects = [];
 
   scene.children
-    .filter(c => c.type === 'Group' || c.userData.isModel)
+    .filter(c => c.userData.isModel)
     .forEach(c => scene.remove(c));
 
   if (planeMesh) { scene.remove(planeMesh); planeMesh = null; }
 
-  // Reset clipping UI
   document.querySelectorAll('.axis-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('.axis-btn[data-axis="none"]').classList.add('active');
   clipActive = false;
@@ -700,8 +720,7 @@ function loadModel(src, isObjectURL = false) {
   progressBar.style.width = '0%';
   setStatus('ЗАГРУЗКА...');
 
-  const nameEl = document.getElementById('model-name');
-  nameEl.textContent = src.split('/').pop().split('?')[0];
+  document.getElementById('model-name').textContent = src.split('/').pop().split('?')[0];
 
   const loader = new GLTFLoader();
 
@@ -715,16 +734,20 @@ function loadModel(src, isObjectURL = false) {
       model.traverse(child => {
         if (!child.isMesh) return;
 
-        // Ensure material supports clipping
+        // iOS: некоторые материалы из GLTF могут использовать расширения,
+        // недоступные на iOS WebGL1. Делаем fallback на MeshStandardMaterial.
+        if (!child.material) {
+          child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+        }
+
         if (!child.material.clippingPlanes) child.material.clippingPlanes = [];
 
         meshes.push(child);
 
-        // FIX: Build edges lazily — only toggle visibility, don't recompute
         const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
         const edgesMat = new THREE.LineBasicMaterial({
           color: 0x4f8ef7,
-          clippingPlanes: [],  // FIX: edges get clipping planes too
+          clippingPlanes: [],
           transparent: true,
           opacity: 0.7
         });
@@ -735,7 +758,6 @@ function loadModel(src, isObjectURL = false) {
         edgeObjects.push(edgeLines);
       });
 
-      // Fit camera
       const box = new THREE.Box3().setFromObject(model);
       modelBox = box;
       const center = box.getCenter(new THREE.Vector3());
@@ -744,14 +766,11 @@ function loadModel(src, isObjectURL = false) {
 
       model.position.sub(center);
 
-      // Dims label
       dimsEl.textContent = `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}`;
 
-      // Grid position
       const bottom = box.min.y - center.y;
       grid.position.y = bottom;
 
-      // Plane mesh
       const planeSize = maxDim * 1.5;
       planeMesh = new THREE.Mesh(
         new THREE.PlaneGeometry(planeSize, planeSize),
@@ -766,17 +785,15 @@ function loadModel(src, isObjectURL = false) {
       planeMesh.visible = false;
       scene.add(planeMesh);
 
-      // Slider range
       const half = maxDim / 2;
       clipSlider.min = -half;
       clipSlider.max = half;
       clipSlider.step = maxDim / 400;
       clipSlider.value = 0;
 
-      // Camera
       const dist = maxDim * 2.2;
       defaultCameraPos.set(dist * 0.7, dist * 0.5, dist);
-      defaultTarget.copy(new THREE.Vector3(0, 0, 0));
+      defaultTarget.set(0, 0, 0);
       perspCam.position.copy(defaultCameraPos);
       perspCam.near = maxDim * 0.001;
       perspCam.far = maxDim * 100;
@@ -789,8 +806,6 @@ function loadModel(src, isObjectURL = false) {
 
       controlsPanel.classList.remove('disabled');
       setStatus('ГОТОВО', true);
-
-      if (isObjectURL) URL.revokeObjectURL(src);
     },
     (xhr) => {
       if (xhr.total > 0) {
@@ -804,45 +819,17 @@ function loadModel(src, isObjectURL = false) {
       statusEl.classList.add('hidden');
       errorEl.style.display = 'block';
       document.getElementById('err-sub').textContent = err.message || 'Файл не найден или повреждён';
-      console.error(err);
+      console.error('GLTFLoader error:', err);
     }
   );
 }
-
-// ── Drag & drop ───────────────────────────────────────────────────────────────
-const dropOverlay = document.getElementById('drop-overlay');
-
-window.addEventListener('dragenter', (e) => {
-  e.preventDefault();
-  dropOverlay.classList.add('active');
-});
-window.addEventListener('dragleave', (e) => {
-  if (!e.relatedTarget) dropOverlay.classList.remove('active');
-});
-window.addEventListener('dragover', e => e.preventDefault());
-window.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropOverlay.classList.remove('active');
-  const file = e.dataTransfer.files[0];
-  if (!file) return;
-  const ext = file.name.split('.').pop().toLowerCase();
-  if (!['glb', 'gltf'].includes(ext)) {
-    setStatus('ПОДДЕРЖИВАЮТСЯ ТОЛЬКО .GLB И .GLTF', false);
-    return;
-  }
-  const url = URL.createObjectURL(file);
-  loadModel(url, true);
-  document.getElementById('model-name').textContent = file.name;
-});
 
 // ── Animate ───────────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
 
-  // Sync ortho cam if active
   if (isOrtho) updateOrthoFrustum();
 
-  // Move visual plane mesh to follow clip constant
   if (planeMesh && clipActive) {
     planeMesh.position.copy(clipPlane.normal).multiplyScalar(-clipPlane.constant);
   }
@@ -852,13 +839,21 @@ function animate() {
 }
 animate();
 
-// ── Resize ────────────────────────────────────────────────────────────────────
-window.addEventListener('resize', () => {
-  perspCam.aspect = innerWidth / innerHeight;
+// ── Resize (с поддержкой visualViewport на iOS) ────────────────────────────
+function onResize() {
+  const w = vw(), h = vh();
+  perspCam.aspect = w / h;
   perspCam.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-});
+}
+
+window.addEventListener('resize', onResize);
+
+// iOS: адресная строка появляется/скрывается — visualViewport меняет размер
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', onResize);
+}
 
 </script>
 </body>
