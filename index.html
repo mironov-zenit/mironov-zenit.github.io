@@ -682,7 +682,7 @@ function loadModel(src) {
         meshes.push(child);
         const el = new THREE.LineSegments(
           new THREE.EdgesGeometry(child.geometry, 15),
-          new THREE.LineBasicMaterial({ color: 0x4f8ef7, clippingPlanes: [], transparent: true, opacity: 0.7 })
+          new THREE.LineBasicMaterial({ color: 0x000000, clippingPlanes: [], transparent: true, opacity: 0.7 })
         );
         el.visible = false;
         child.add(el);
