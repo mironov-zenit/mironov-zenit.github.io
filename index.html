@@ -115,6 +115,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
     <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
     <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
     <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
+    <button class="tb-btn" id="btn-bg" title="Стиль фона">◐</button>
   </div>
   <div class="tb-divider"></div>
   <div class="tb-group">
@@ -197,7 +198,7 @@ const vh = () => window.visualViewport ? window.visualViewport.height : window.i
 // ── State ─────────────────────────────────────────────────────────────────────
 let meshes=[], edgeObjects=[], planeMesh=null;
 let defaultCameraPos=new THREE.Vector3(), defaultTarget=new THREE.Vector3();
-let isOrtho=false, showPlaneVis=false, clipActive=false, inverted=false, activeView=null;
+let isOrtho=false, showPlaneVis=false, clipActive=false, inverted=false, let isLightBg = false, activeView=null;
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
@@ -205,6 +206,26 @@ scene.background = new THREE.Color(0x0d0d0f);
 const grid = new THREE.GridHelper(100,40,0x1f1f2a,0x1a1a22);
 grid.visible = true;
 scene.add(grid);
+
+function updateBackground() {
+  if (isLightBg) {
+    scene.background = new THREE.Color(0xf2f2f2);
+
+    grid.material.color.set(0xcccccc);
+
+    keyLight.intensity = 0.9;
+    fillLight.intensity = 0.3;
+    rimLight.intensity = 0.2;
+  } else {
+    scene.background = new THREE.Color(0x0d0d0f);
+
+    grid.material.color.set(0x1f1f2a);
+
+    keyLight.intensity = 1.2;
+    fillLight.intensity = 0.4;
+    rimLight.intensity = 0.3;
+  }
+}
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 const perspCam = new THREE.PerspectiveCamera(50, vw()/vh(), 0.01, 100000);
@@ -445,6 +466,19 @@ document.getElementById('btn-grid').addEventListener('click',()=>{
   grid.visible=!grid.visible;
   document.getElementById('btn-grid').classList.toggle('active',grid.visible);
 });
+document.getElementById('btn-bg').addEventListener('click', () => {
+  isLightBg = !isLightBg;
+
+  updateBackground();
+
+  document.getElementById('btn-bg')
+    .classList.toggle('active', isLightBg);
+
+  setStatus(
+    isLightBg ? 'СВЕТЛЫЙ ФОН' : 'ТЁМНЫЙ ФОН',
+    true
+  );
+});
 
 // ── UI refs ───────────────────────────────────────────────────────────────────
 const progressBar=document.getElementById('progress-bar'), statusEl=document.getElementById('status');
@@ -563,6 +597,7 @@ function animate(){
   controls.update();
   renderer.render(scene,camera);
 }
+updateBackground();
 animate();
 
 // ── Resize ────────────────────────────────────────────────────────────────────
