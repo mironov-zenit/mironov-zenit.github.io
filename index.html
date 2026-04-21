@@ -468,12 +468,9 @@ document.getElementById('btn-grid').addEventListener('click',()=>{
 });
 document.getElementById('btn-bg').addEventListener('click', () => {
   isLightBg = !isLightBg;
-
   updateBackground();
-
   document.getElementById('btn-bg')
     .classList.toggle('active', isLightBg);
-
   setStatus(
     isLightBg ? 'СВЕТЛЫЙ ФОН' : 'ТЁМНЫЙ ФОН',
     true
