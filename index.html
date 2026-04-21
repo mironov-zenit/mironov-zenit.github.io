@@ -198,9 +198,9 @@ if (HTMLScriptElement.supports && HTMLScriptElement.supports('importmap')) {
     RGT   = справа,     перпендикулярно плоскости YZ
   -->
   <div class="tb-group">
-    <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху — перпендикулярно XZ">TOP</button>
-    <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди — перпендикулярно XY">FRT</button>
-    <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа — перпендикулярно YZ">RGT</button>
+    <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху — перпендикулярно XZ">ВЕРХ</button>
+    <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди — перпендикулярно XY">ПЕРЕД</button>
+    <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа — перпендикулярно YZ">БОК</button>
   </div>
 
 </div>
@@ -210,7 +210,7 @@ if (HTMLScriptElement.supports && HTMLScriptElement.supports('importmap')) {
   <div class="ctrl-row">
     <span class="ctrl-label">Вид</span>
     <div class="mode-group">
-      <button class="mode-btn active" data-mode="solid">Solid</button>
+      <button class="mode-btn active" data-mode="solid">Обычный</button>
       <button class="mode-btn" data-mode="edges">Рёбра</button>
       <button class="mode-btn" data-mode="wireframe">Каркас</button>
     </div>
@@ -224,7 +224,7 @@ if (HTMLScriptElement.supports && HTMLScriptElement.supports('importmap')) {
       <button class="axis-btn" data-axis="xz">XZ</button>
       <button class="axis-btn" data-axis="yz">YZ</button>
     </div>
-    <button class="invert-btn" id="invertBtn">↔ Инверт</button>
+    <button class="invert-btn" id="invertBtn">↔ Направление</button>
   </div>
 
   <div class="ctrl-row" id="clip-row" style="display:none;">
