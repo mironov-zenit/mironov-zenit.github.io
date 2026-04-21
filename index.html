@@ -469,13 +469,16 @@ document.getElementById('btn-grid').addEventListener('click',()=>{
 });
 document.getElementById('btn-bg').addEventListener('click', () => {
   isLightBg = !isLightBg;
-  updateBackground();
-  document.getElementById('btn-bg')
-    .classList.toggle('active', isLightBg);
-  setStatus(
-    isLightBg ? 'СВЕТЛЫЙ ФОН' : 'ТЁМНЫЙ ФОН',
-    true
-  );
+  
+  if (isLightBg) {
+    scene.background = new THREE.Color(0xf2f2f2);
+    document.body.style.background = '#f2f2f2';
+  } else {
+    scene.background = new THREE.Color(0x0d0d0f);
+    document.body.style.background = '#0d0d0f';
+  }
+
+  document.getElementById('btn-bg').classList.toggle('active', isLightBg);
 });
 
 // ── UI refs ───────────────────────────────────────────────────────────────────
