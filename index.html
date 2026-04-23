@@ -115,13 +115,13 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
     <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
     <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
     <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
-    <button class="tb-btn" id="btn-bg" title="Стиль фона">◐</button>
+    <button class="tb-btn" id="btn-bg" title="Светлый / тёмный фон">◐</button>
   </div>
   <div class="tb-divider"></div>
   <div class="tb-group">
-    <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху — ⊥ XZ">ВЕРХ</button>
-    <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди — ⊥ XY">ПЕРЕД</button>
-    <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа — ⊥ YZ">БОК</button>
+    <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху / снизу — повторное нажатие переворачивает">ВЕРХ</button>
+    <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди / сзади — повторное нажатие переворачивает">ПЕРЕД</button>
+    <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа / слева — повторное нажатие переворачивает">БОК</button>
   </div>
 </div>
 <div id="controls" class="panel disabled">
@@ -199,34 +199,14 @@ const vh = () => window.visualViewport ? window.visualViewport.height : window.i
 let meshes=[], edgeObjects=[], planeMesh=null;
 let defaultCameraPos=new THREE.Vector3(), defaultTarget=new THREE.Vector3();
 let isOrtho=false, showPlaneVis=false, clipActive=false, inverted=false, activeView=null;
-let isLightBg = false;
+let isLightBg=false;
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d0d0f);
-const grid = new THREE.GridHelper(100,40,0xcccccc,0xcccccc);
+const grid = new THREE.GridHelper(100,40,0x1f1f2a,0x1a1a22);
 grid.visible = true;
 scene.add(grid);
-
-function updateBackground() {
-  if (isLightBg) {
-    scene.background = new THREE.Color(0xf2f2f2);
-
-    grid.material.color.set(0xcccccc);
-
-    kl.intensity = 0.9;
-    fl.intensity = 0.3;
-    rl.intensity = 0.2;
-  } else {
-    scene.background = new THREE.Color(0x0d0d0f);
-
-    grid.material.color.set(0xcccccc);
-
-    kl.intensity = 1.2;
-    fl.intensity = 0.4;
-    rl.intensity = 0.3;
-  }
-}
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 const perspCam = new THREE.PerspectiveCamera(50, vw()/vh(), 0.01, 100000);
@@ -273,6 +253,7 @@ let cameraAnim = null;
 function clearActiveView() {
   document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
   activeView = null;
+  viewFlipped.top = false; viewFlipped.front = false; viewFlipped.right = false;
   if (cameraAnim) { cameraAnim.cancelled=true; cameraAnim=null; }
   controls.enabled = true;
 }
@@ -437,20 +418,54 @@ function animateCameraTo(targetPos, targetUp, onDone) {
   requestAnimationFrame(step);
 }
 
-function setCameraView(dir, up, name) {
-  const box=perspCam.userData.modelBox; if (!box) return;
-  const sz=new THREE.Vector3(); box.getSize(sz);
-  const dist=Math.max(sz.x,sz.y,sz.z)*2.2;
-  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('btn-view-'+name)?.classList.add('active');
-  activeView=name;
+// ── Виды камеры ───────────────────────────────────────────────────────────────
+// Повторное нажатие на уже активную кнопку переворачивает вид на противоположный.
+// Состояние флипа хранится отдельно для каждой оси.
+const viewFlipped = { top: false, front: false, right: false };
+
+function setCameraView(name) {
+  const box = perspCam.userData.modelBox; if (!box) return;
+  const sz  = new THREE.Vector3(); box.getSize(sz);
+  const dist = Math.max(sz.x, sz.y, sz.z) * 2.2;
+
+  // Если нажата уже активная кнопка — флипаем направление
+  if (activeView === name) viewFlipped[name] = !viewFlipped[name];
+  else viewFlipped[name] = false;   // сброс флипа при смене вида
+
+  const flip = viewFlipped[name] ? -1 : 1;
+
+  // Направления для каждой оси и их противоположности:
+  //   top   +Y / -Y  (up меняется тоже — иначе будет перевёрнутое изображение)
+  //   front +Z / -Z
+  //   right +X / -X
+  let dir, up, label;
+  if (name === 'top') {
+    dir   = new THREE.Vector3(0, flip, 0);
+    // При виде снизу up остаётся (0,0,-1) — модель не «переворачивается» по горизонтали
+    up    = new THREE.Vector3(0, 0, -1);
+    label = flip > 0 ? 'ВИД СВЕРХУ  ·  ⊥ XZ' : 'ВИД СНИЗУ  ·  ⊥ XZ';
+  } else if (name === 'front') {
+    dir   = new THREE.Vector3(0, 0, flip);
+    up    = new THREE.Vector3(0, 1, 0);
+    label = flip > 0 ? 'ВИД СПЕРЕДИ  ·  ⊥ XY' : 'ВИД СЗАДИ  ·  ⊥ XY';
+  } else {
+    dir   = new THREE.Vector3(flip, 0, 0);
+    up    = new THREE.Vector3(0, 1, 0);
+    label = flip > 0 ? 'ВИД СПРАВА  ·  ⊥ YZ' : 'ВИД СЛЕВА  ·  ⊥ YZ';
+  }
+
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-view-' + name)?.classList.add('active');
+  activeView = name;
+
   if (isOrtho) applyProjection();
-  animateCameraTo(dir.clone().multiplyScalar(dist), up, null);
+  animateCameraTo(dir.multiplyScalar(dist), up, null);
+  setStatus(label, true);
 }
 
-document.getElementById('btn-view-top').addEventListener('click',  ()=>{ setCameraView(new THREE.Vector3(0,1,0),new THREE.Vector3(0,0,-1),'top');   setStatus('ВИД СВЕРХУ  ·  ⊥ XZ',true); });
-document.getElementById('btn-view-front').addEventListener('click', ()=>{ setCameraView(new THREE.Vector3(0,0,1),new THREE.Vector3(0,1,0),'front'); setStatus('ВИД СПЕРЕДИ  ·  ⊥ XY',true); });
-document.getElementById('btn-view-right').addEventListener('click', ()=>{ setCameraView(new THREE.Vector3(1,0,0),new THREE.Vector3(0,1,0),'right'); setStatus('ВИД СПРАВА  ·  ⊥ YZ',true); });
+document.getElementById('btn-view-top').addEventListener('click',   () => setCameraView('top'));
+document.getElementById('btn-view-front').addEventListener('click',  () => setCameraView('front'));
+document.getElementById('btn-view-right').addEventListener('click',  () => setCameraView('right'));
 
 document.getElementById('btn-reset').addEventListener('click',()=>{
   clearActiveView();
@@ -466,19 +481,6 @@ document.getElementById('btn-ortho').addEventListener('click',()=>{
 document.getElementById('btn-grid').addEventListener('click',()=>{
   grid.visible=!grid.visible;
   document.getElementById('btn-grid').classList.toggle('active',grid.visible);
-});
-document.getElementById('btn-bg').addEventListener('click', () => {
-  isLightBg = !isLightBg;
-  
-  if (isLightBg) {
-    scene.background = new THREE.Color(0xf2f2f2);
-    document.body.style.background = '#f2f2f2';
-  } else {
-    scene.background = new THREE.Color(0x0d0d0f);
-    document.body.style.background = '#0d0d0f';
-  }
-
-  document.getElementById('btn-bg').classList.toggle('active', isLightBg);
 });
 
 // ── UI refs ───────────────────────────────────────────────────────────────────
@@ -577,7 +579,7 @@ function loadModel(src) {
     },
     (xhr)=>{
       if (xhr.total>0){
-        const pct=Math.min((xhr.loaded/xhr.total)*100, 100).toFixed(0);
+        const pct=(xhr.loaded/xhr.total*100).toFixed(0);
         progressBar.style.width=pct+'%'; setStatus(`ЗАГРУЗКА ${pct}%`);
       }
     },
@@ -590,6 +592,17 @@ function loadModel(src) {
   );
 }
 
+document.getElementById('btn-bg').addEventListener('click', () => {
+  isLightBg = !isLightBg;
+  scene.background = new THREE.Color(isLightBg ? 0xf2f2f2 : 0x0d0d0f);
+  document.body.style.background = isLightBg ? '#f2f2f2' : '#0d0d0f';
+  // немного убираем интенсивность lights на светлом фоне — модель не пересвечивается
+  kl.intensity = isLightBg ? 0.9 : 1.2;
+  fl.intensity = isLightBg ? 0.3 : 0.4;
+  rl.intensity = isLightBg ? 0.2 : 0.3;
+  document.getElementById('btn-bg').classList.toggle('active', isLightBg);
+});
+
 // ── Animate ───────────────────────────────────────────────────────────────────
 function animate(){
   requestAnimationFrame(animate);
@@ -598,7 +611,6 @@ function animate(){
   controls.update();
   renderer.render(scene,camera);
 }
-updateBackground();
 animate();
 
 // ── Resize ────────────────────────────────────────────────────────────────────
