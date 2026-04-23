@@ -251,7 +251,11 @@ controls.zoomSpeed = 0.8;
 
 let cameraAnim = null;
 function clearActiveView() {
-  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view-btn').forEach(b => {
+    b.classList.remove('active');
+    const n = b.id.replace('btn-view-', '');
+    if (viewLabels[n]) b.textContent = viewLabels[n];
+  });
   activeView = null;
   viewFlipped.top = false; viewFlipped.front = false; viewFlipped.right = false;
   if (cameraAnim) { cameraAnim.cancelled=true; cameraAnim=null; }
@@ -452,18 +456,18 @@ function setCameraView(name) {
     label = flip > 0 ? 'ВИД СПРАВА  ·  ⊥ YZ' : 'ВИД СЛЕВА  ·  ⊥ YZ';
   }
 
-  // Снимаем подсветку и сбрасываем текст со всех кнопок видов
+  // Снимаем подсветку и восстанавливаем текст со всех кнопок
   document.querySelectorAll('.view-btn').forEach(b => {
     b.classList.remove('active');
     const n = b.id.replace('btn-view-', '');
-    b.textContent = viewLabels[n] || b.textContent;
+    if (viewLabels[n]) b.textContent = viewLabels[n];
   });
 
-  // Активируем нужную кнопку и меняем её иконку на ↺
-  // — сигнал «ещё одно нажатие перевернёт вид»
   const btn = document.getElementById('btn-view-' + name);
   btn?.classList.add('active');
-  if (btn) btn.textContent = '↺';
+  // Первое нажатие → ↺ («нажми ещё раз чтобы перевернуть»)
+  // После флипа → исходная подпись («сейчас перевёрнутый, нажми чтобы вернуть»)
+  if (btn) btn.textContent = viewFlipped[name] ? viewLabels[name] : '↺';
 
   activeView = name;
   if (isOrtho) applyProjection();
