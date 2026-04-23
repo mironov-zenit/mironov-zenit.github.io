@@ -204,7 +204,7 @@ let isLightBg=false;
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d0d0f);
-const grid = new THREE.GridHelper(100,40,0x4a6685,0x4a6685);
+const grid = new THREE.GridHelper(100,40,0x1f1f2a,0x1a1a22);
 grid.visible = true;
 scene.add(grid);
 
@@ -423,6 +423,9 @@ function animateCameraTo(targetPos, targetUp, onDone) {
 // Состояние флипа хранится отдельно для каждой оси.
 const viewFlipped = { top: false, front: false, right: false };
 
+// Исходные подписи кнопок — восстанавливаем при сбросе
+const viewLabels = { top: 'ВЕРХ', front: 'ПЕРЕД', right: 'БОК' };
+
 function setCameraView(name) {
   const box = perspCam.userData.modelBox; if (!box) return;
   const sz  = new THREE.Vector3(); box.getSize(sz);
@@ -434,14 +437,9 @@ function setCameraView(name) {
 
   const flip = viewFlipped[name] ? -1 : 1;
 
-  // Направления для каждой оси и их противоположности:
-  //   top   +Y / -Y  (up меняется тоже — иначе будет перевёрнутое изображение)
-  //   front +Z / -Z
-  //   right +X / -X
   let dir, up, label;
   if (name === 'top') {
     dir   = new THREE.Vector3(0, flip, 0);
-    // При виде снизу up остаётся (0,0,-1) — модель не «переворачивается» по горизонтали
     up    = new THREE.Vector3(0, 0, -1);
     label = flip > 0 ? 'ВИД СВЕРХУ  ·  ⊥ XZ' : 'ВИД СНИЗУ  ·  ⊥ XZ';
   } else if (name === 'front') {
@@ -454,10 +452,20 @@ function setCameraView(name) {
     label = flip > 0 ? 'ВИД СПРАВА  ·  ⊥ YZ' : 'ВИД СЛЕВА  ·  ⊥ YZ';
   }
 
-  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('btn-view-' + name)?.classList.add('active');
-  activeView = name;
+  // Снимаем подсветку и сбрасываем текст со всех кнопок видов
+  document.querySelectorAll('.view-btn').forEach(b => {
+    b.classList.remove('active');
+    const n = b.id.replace('btn-view-', '');
+    b.textContent = viewLabels[n] || b.textContent;
+  });
 
+  // Активируем нужную кнопку и меняем её иконку на ↺
+  // — сигнал «ещё одно нажатие перевернёт вид»
+  const btn = document.getElementById('btn-view-' + name);
+  btn?.classList.add('active');
+  if (btn) btn.textContent = '↺';
+
+  activeView = name;
   if (isOrtho) applyProjection();
   animateCameraTo(dir.multiplyScalar(dist), up, null);
   setStatus(label, true);
