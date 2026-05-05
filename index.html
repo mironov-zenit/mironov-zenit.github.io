@@ -171,7 +171,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <input type="range" id="clipSlider-xy">
       <span class="slider-val" id="sliderVal-xy">0.0</span>
     </div>
-    <button class="invert-btn" data-axis="xy">↔</button>
+    <button class="invert-btn" data-axis="xy">Обратить</button>
     <label class="toggle-wrap" data-axis-plane="xy">
       <div class="toggle-track" id="toggleTrack-xy"><div class="toggle-thumb"></div></div>
       <span class="toggle-label">Вид</span>
@@ -185,7 +185,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <input type="range" id="clipSlider-xz">
       <span class="slider-val" id="sliderVal-xz">0.0</span>
     </div>
-    <button class="invert-btn" data-axis="xz">↔</button>
+    <button class="invert-btn" data-axis="xz">Обратить</button>
     <label class="toggle-wrap" data-axis-plane="xz">
       <div class="toggle-track" id="toggleTrack-xz"><div class="toggle-thumb"></div></div>
       <span class="toggle-label">Вид</span>
@@ -199,7 +199,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <input type="range" id="clipSlider-yz">
       <span class="slider-val" id="sliderVal-yz">0.0</span>
     </div>
-    <button class="invert-btn" data-axis="yz">↔</button>
+    <button class="invert-btn" data-axis="yz">Обратить</button>
     <label class="toggle-wrap" data-axis-plane="yz">
       <div class="toggle-track" id="toggleTrack-yz"><div class="toggle-thumb"></div></div>
       <span class="toggle-label">Вид</span>
@@ -453,7 +453,7 @@ document.querySelectorAll('[data-axis-plane]').forEach(wrap => {
 document.getElementById('btn-clip-mode').addEventListener('click', () => {
   clipIntersectionMode = !clipIntersectionMode;
   const btn = document.getElementById('btn-clip-mode');
-  btn.textContent = clipIntersectionMode ? 'ИЛИ' : 'И';
+  btn.textContent = clipIntersectionMode ? '3/4' : '1/4';
   btn.classList.toggle('active', clipIntersectionMode);
   updateClippingPlanes();
   setStatus(clipIntersectionMode ? 'РЕЖИМ: ОБЪЕДИНЕНИЕ (3/4)' : 'РЕЖИМ: ПЕРЕСЕЧЕНИЕ (1/4)', true);
