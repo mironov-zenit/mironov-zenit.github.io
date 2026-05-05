@@ -610,7 +610,7 @@ else setStatus('НЕТ МОДЕЛИ — ПРОВЕРЬТЕ QR-КОД');
 function resetClipUI() {
   clipIntersectionMode = false;
   const modeBtn = document.getElementById('btn-clip-mode');
-  modeBtn.textContent = 'И';
+  modeBtn.textContent = 'Режим';
   modeBtn.classList.remove('active');
   modeBtn.style.display = 'none';
   ['xy','xz','yz'].forEach(axis => {
