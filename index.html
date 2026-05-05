@@ -53,13 +53,20 @@ canvas { display:block; touch-action:none; -webkit-touch-callout:none; }
 .ctrl-row { display:flex; align-items:center; gap:12px; }
 .ctrl-label { font-size:10px; letter-spacing:.1em; color:var(--muted); min-width:36px; text-transform:uppercase; }
 .axis-group { display:flex; gap:4px; }
+
+/* Кнопки осей — теперь toggles, не radio. Активные подсвечены */
 .axis-btn {
   padding:5px 12px; border:1px solid var(--border); border-radius:6px;
   background:transparent; color:var(--muted); cursor:pointer;
   font-family:var(--font); font-size:11px; letter-spacing:.06em; transition:all .15s;
+  user-select:none;
 }
 .axis-btn:hover { color:var(--text); border-color:rgba(255,255,255,.2); }
 .axis-btn.active { background:rgba(79,142,247,.15); color:var(--accent); border-color:rgba(79,142,247,.4); }
+
+/* Строки срезов — по одной на каждую ось */
+.clip-axis-row { display:flex; flex-direction:column; gap:8px; }
+
 .slider-wrap { flex:1; display:flex; align-items:center; gap:10px; }
 input[type=range] {
   -webkit-appearance:none; appearance:none; flex:1; height:3px;
@@ -71,7 +78,6 @@ input[type=range]::-webkit-slider-thumb {
 }
 input[type=range]:active::-webkit-slider-thumb { cursor:grabbing; box-shadow:0 0 0 5px rgba(79,142,247,.3); }
 input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--accent); border:none; }
-/* Слайдер взрыва — цвет danger */
 #explodeSlider::-webkit-slider-thumb { background:var(--danger); box-shadow:0 0 0 3px rgba(249,115,22,.25); }
 #explodeSlider:active::-webkit-slider-thumb { box-shadow:0 0 0 5px rgba(249,115,22,.3); }
 #explodeSlider::-moz-range-thumb { background:var(--danger); }
@@ -91,9 +97,10 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
 .toggle-track.on .toggle-thumb { transform:translateX(12px); }
 .toggle-label { font-size:10px; letter-spacing:.08em; color:var(--muted); text-transform:uppercase; }
 .invert-btn {
-  padding:5px 12px; border:1px solid var(--border); border-radius:6px;
+  padding:5px 8px; border:1px solid var(--border); border-radius:6px;
   background:transparent; color:var(--muted); cursor:pointer;
-  font-family:var(--font); font-size:10px; letter-spacing:.06em; text-transform:uppercase; transition:all .15s;
+  font-family:var(--font); font-size:10px; letter-spacing:.04em; text-transform:uppercase; transition:all .15s;
+  flex-shrink:0;
 }
 .invert-btn:hover { color:var(--danger); border-color:rgba(249,115,22,.4); background:rgba(249,115,22,.08); }
 #progress-wrap { position:absolute; top:0; left:0; right:0; height:2px; z-index:100; pointer-events:none; }
@@ -124,7 +131,9 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
     <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа / слева — повторное нажатие переворачивает">БОК</button>
   </div>
 </div>
+
 <div id="controls" class="panel disabled">
+
   <div class="ctrl-row">
     <span class="ctrl-label">Вид</span>
     <div class="mode-group">
@@ -133,27 +142,64 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <button class="mode-btn" data-mode="wireframe">Каркас</button>
     </div>
   </div>
+
+  <!--
+    Мультиплоскостной срез.
+    Каждая ось — независимый toggle с собственным слайдером.
+    Можно включить любые 1–3 одновременно.
+    Слайдеры появляются только для активных осей.
+  -->
   <div class="ctrl-row">
     <span class="ctrl-label">Срез</span>
     <div class="axis-group">
-      <button class="axis-btn active" data-axis="none">Нет</button>
       <button class="axis-btn" data-axis="xy">XY</button>
       <button class="axis-btn" data-axis="xz">XZ</button>
       <button class="axis-btn" data-axis="yz">YZ</button>
     </div>
-    <button class="invert-btn" id="invertBtn">↔ Направление</button>
   </div>
-  <div class="ctrl-row" id="clip-row" style="display:none;">
-    <span class="ctrl-label">Позиция</span>
+
+  <!-- Слайдер XY -->
+  <div class="ctrl-row clip-slider-row" id="clip-row-xy" style="display:none;">
+    <span class="ctrl-label" style="font-size:9px;color:var(--accent);">XY</span>
     <div class="slider-wrap">
-      <input type="range" id="clipSlider">
-      <span class="slider-val" id="sliderVal">0.0</span>
+      <input type="range" id="clipSlider-xy">
+      <span class="slider-val" id="sliderVal-xy">0.0</span>
     </div>
-    <label class="toggle-wrap" id="planeToggle">
-      <div class="toggle-track" id="toggleTrack"><div class="toggle-thumb"></div></div>
-      <span class="toggle-label">Плоскость</span>
+    <button class="invert-btn" data-axis="xy">↔</button>
+    <label class="toggle-wrap" data-axis-plane="xy">
+      <div class="toggle-track" id="toggleTrack-xy"><div class="toggle-thumb"></div></div>
+      <span class="toggle-label">Вид</span>
     </label>
   </div>
+
+  <!-- Слайдер XZ -->
+  <div class="ctrl-row clip-slider-row" id="clip-row-xz" style="display:none;">
+    <span class="ctrl-label" style="font-size:9px;color:var(--accent);">XZ</span>
+    <div class="slider-wrap">
+      <input type="range" id="clipSlider-xz">
+      <span class="slider-val" id="sliderVal-xz">0.0</span>
+    </div>
+    <button class="invert-btn" data-axis="xz">↔</button>
+    <label class="toggle-wrap" data-axis-plane="xz">
+      <div class="toggle-track" id="toggleTrack-xz"><div class="toggle-thumb"></div></div>
+      <span class="toggle-label">Вид</span>
+    </label>
+  </div>
+
+  <!-- Слайдер YZ -->
+  <div class="ctrl-row clip-slider-row" id="clip-row-yz" style="display:none;">
+    <span class="ctrl-label" style="font-size:9px;color:var(--accent);">YZ</span>
+    <div class="slider-wrap">
+      <input type="range" id="clipSlider-yz">
+      <span class="slider-val" id="sliderVal-yz">0.0</span>
+    </div>
+    <button class="invert-btn" data-axis="yz">↔</button>
+    <label class="toggle-wrap" data-axis-plane="yz">
+      <div class="toggle-track" id="toggleTrack-yz"><div class="toggle-thumb"></div></div>
+      <span class="toggle-label">Вид</span>
+    </label>
+  </div>
+
   <!-- Строка взрыва: появляется только если мешей > 1 -->
   <div class="ctrl-row" id="explode-row" style="display:none;">
     <span class="ctrl-label" style="color:var(--danger);">Взрыв</span>
@@ -162,7 +208,9 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <span class="slider-val" id="explodeVal">0%</span>
     </div>
   </div>
+
 </div>
+
 <div id="error">
   <div class="err-title">ОШИБКА ЗАГРУЗКИ</div>
   <div class="err-sub" id="err-sub">Файл не найден или повреждён</div>
@@ -196,10 +244,47 @@ const vw = () => window.visualViewport ? window.visualViewport.width  : window.i
 const vh = () => window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let meshes=[], edgeObjects=[], planeMesh=null;
+let meshes=[], edgeObjects=[], planeMeshes={};
 let defaultCameraPos=new THREE.Vector3(), defaultTarget=new THREE.Vector3();
-let isOrtho=false, showPlaneVis=false, clipActive=false, inverted=false, activeView=null;
-let isLightBg=false;
+let isOrtho=false, showPlaneVis={xy:false,xz:false,yz:false};
+let activeView=null, isLightBg=false;
+
+// ── Мультиплоскостной срез ────────────────────────────────────────────────────
+//
+// Вместо одной clipPlane — словарь из трёх независимых плоскостей.
+// Каждая имеет: объект THREE.Plane, флаг активности, флаг инверсии,
+// текущее значение слайдера.
+// Активные плоскости собираются в массив и передаются в material.clippingPlanes.
+
+const AXIS_NORMALS = {
+  xy: new THREE.Vector3(0, 0, 1),
+  xz: new THREE.Vector3(0, 1, 0),
+  yz: new THREE.Vector3(1, 0, 0),
+};
+
+const clipState = {
+  xy: { plane: new THREE.Plane(new THREE.Vector3(0,0,1), 0), active:false, inverted:false, value:0 },
+  xz: { plane: new THREE.Plane(new THREE.Vector3(0,1,0), 0), active:false, inverted:false, value:0 },
+  yz: { plane: new THREE.Plane(new THREE.Vector3(1,0,0), 0), active:false, inverted:false, value:0 },
+};
+
+// Возвращает массив активных плоскостей для передачи в material.clippingPlanes
+function getActivePlanes() {
+  return Object.values(clipState).filter(s => s.active).map(s => s.plane);
+}
+
+// Применяет актуальный набор плоскостей ко всем мешам и рёбрам
+function updateClippingPlanes() {
+  const planes = getActivePlanes();
+  meshes.forEach(m => { m.material.clippingPlanes = planes; });
+  edgeObjects.forEach(e => { e.material.clippingPlanes = planes; });
+}
+
+// Обновляет constant плоскости с учётом инверсии
+function updatePlaneConstant(axis) {
+  const s = clipState[axis];
+  s.plane.constant = s.inverted ? -s.value : s.value;
+}
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
@@ -250,71 +335,95 @@ controls.dampingFactor = 0.08;
 controls.zoomSpeed = 0.8;
 
 let cameraAnim = null;
+const viewFlipped = { top:false, front:false, right:false };
+const viewLabels  = { top:'ВЕРХ', front:'ПЕРЕД', right:'БОК' };
+
 function clearActiveView() {
   document.querySelectorAll('.view-btn').forEach(b => {
     b.classList.remove('active');
-    const n = b.id.replace('btn-view-', '');
+    const n = b.id.replace('btn-view-','');
     if (viewLabels[n]) b.textContent = viewLabels[n];
   });
   activeView = null;
-  viewFlipped.top = false; viewFlipped.front = false; viewFlipped.right = false;
+  viewFlipped.top=false; viewFlipped.front=false; viewFlipped.right=false;
   if (cameraAnim) { cameraAnim.cancelled=true; cameraAnim=null; }
   controls.enabled = true;
 }
 controls.addEventListener('start', clearActiveView);
 
-// ── Clipping ──────────────────────────────────────────────────────────────────
-const clipPlane = new THREE.Plane(new THREE.Vector3(0,0,1),0);
-const axisNormals = { xy:new THREE.Vector3(0,0,1), xz:new THREE.Vector3(0,1,0), yz:new THREE.Vector3(1,0,0) };
-const clipSlider  = document.getElementById('clipSlider');
-const sliderVal   = document.getElementById('sliderVal');
-const clipRow     = document.getElementById('clip-row');
-const toggleTrack = document.getElementById('toggleTrack');
-
-document.querySelectorAll('.axis-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('.axis-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
+// ── Кнопки осей (toggle) ──────────────────────────────────────────────────────
+document.querySelectorAll('.axis-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
     const axis = btn.dataset.axis;
-    if (axis==='none') {
-      clipActive=false; clipRow.style.display='none';
-      meshes.forEach(m=>{m.material.clippingPlanes=[];});
-      edgeObjects.forEach(e=>{e.material.clippingPlanes=[];});
-      if (planeMesh) planeMesh.visible=false;
-      return;
+    const s    = clipState[axis];
+
+    if (s.active) {
+      // Выключаем эту ось
+      s.active = false;
+      btn.classList.remove('active');
+      document.getElementById('clip-row-' + axis).style.display = 'none';
+      if (planeMeshes[axis]) planeMeshes[axis].visible = false;
+    } else {
+      // Включаем эту ось
+      s.active   = true;
+      s.inverted = false;
+      s.value    = 0;
+      s.plane.normal.copy(AXIS_NORMALS[axis]);
+      s.plane.constant = 0;
+
+      // Сбрасываем слайдер и подпись
+      const slider = document.getElementById('clipSlider-' + axis);
+      const valEl  = document.getElementById('sliderVal-'  + axis);
+      if (slider) { slider.value = 0; }
+      if (valEl)  { valEl.textContent = '0.0'; }
+
+      btn.classList.add('active');
+      document.getElementById('clip-row-' + axis).style.display = 'flex';
+
+      // Визуальная плоскость — если включена
+      if (planeMeshes[axis] && showPlaneVis[axis]) planeMeshes[axis].visible = true;
     }
-    clipActive=true; clipRow.style.display='flex'; inverted=false;
-    clipPlane.normal.copy(axisNormals[axis]);
-    clipPlane.constant=0; clipSlider.value=0; sliderVal.textContent='0.0';
-    alignPlaneMesh(axis);
-    meshes.forEach(m=>{m.material.clippingPlanes=[clipPlane];});
-    edgeObjects.forEach(e=>{e.material.clippingPlanes=[clipPlane];});
-    if (planeMesh) planeMesh.visible=showPlaneVis;
+
+    updateClippingPlanes();
   });
 });
 
-function alignPlaneMesh(axis) {
-  if (!planeMesh) return;
-  if (axis==='xy') planeMesh.rotation.set(0,0,0);
-  if (axis==='xz') planeMesh.rotation.set(Math.PI/2,0,0);
-  if (axis==='yz') planeMesh.rotation.set(0,Math.PI/2,0);
-}
+// ── Слайдеры срезов ───────────────────────────────────────────────────────────
+['xy','xz','yz'].forEach(axis => {
+  const slider = document.getElementById('clipSlider-' + axis);
+  const valEl  = document.getElementById('sliderVal-'  + axis);
 
-clipSlider.addEventListener('input',()=>{
-  const v=Number(clipSlider.value);
-  clipPlane.constant = inverted?-v:v;
-  sliderVal.textContent = v.toFixed(1);
+  slider?.addEventListener('input', () => {
+    const v = Number(slider.value);
+    clipState[axis].value = v;
+    updatePlaneConstant(axis);
+    valEl.textContent = v.toFixed(1);
+  });
 });
-document.getElementById('invertBtn').addEventListener('click',()=>{
-  inverted=!inverted;
-  const v=Number(clipSlider.value);
-  clipPlane.normal.multiplyScalar(-1);
-  clipPlane.constant = inverted?-v:v;
+
+// ── Кнопки инверсии (по одной на каждую ось) ─────────────────────────────────
+document.querySelectorAll('.invert-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const axis = btn.dataset.axis;
+    const s    = clipState[axis];
+    s.inverted = !s.inverted;
+    // Разворачиваем нормаль
+    s.plane.normal.multiplyScalar(-1);
+    updatePlaneConstant(axis);
+    btn.style.color = s.inverted ? 'var(--danger)' : '';
+    btn.style.borderColor = s.inverted ? 'rgba(249,115,22,.4)' : '';
+  });
 });
-document.getElementById('planeToggle').addEventListener('click',()=>{
-  showPlaneVis=!showPlaneVis;
-  toggleTrack.classList.toggle('on',showPlaneVis);
-  if (planeMesh) planeMesh.visible=showPlaneVis&&clipActive;
+
+// ── Переключатели видимости плоскостей ───────────────────────────────────────
+document.querySelectorAll('[data-axis-plane]').forEach(wrap => {
+  const axis  = wrap.dataset.axisPlane;
+  const track = document.getElementById('toggleTrack-' + axis);
+  wrap.addEventListener('click', () => {
+    showPlaneVis[axis] = !showPlaneVis[axis];
+    track?.classList.toggle('on', showPlaneVis[axis]);
+    if (planeMeshes[axis]) planeMeshes[axis].visible = showPlaneVis[axis] && clipState[axis].active;
+  });
 });
 
 // ── Render mode ───────────────────────────────────────────────────────────────
@@ -329,52 +438,25 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
 });
 
 // ── Explode ───────────────────────────────────────────────────────────────────
-//
-// Алгоритм:
-// 1. После загрузки и центрирования модели — обновляем matrixWorld (scene.updateMatrixWorld).
-// 2. Для каждого меша получаем его мировой центр через getWorldPosition.
-// 3. Вектор взрыва = направление от центра сборки (0,0,0) к центру меша.
-//    Если меш находится в центре (расстояние < порога) — направляем вверх по Y.
-// 4. Сохраняем исходную ЛОКАЛЬНУЮ позицию меша — будем смещать именно её.
-// 5. При движении слайдера (0..1): новая локальная позиция = origin + dir * t * scale.
-//
-// Почему локальная позиция, а не мировая:
-//   Смещение нужно применять в пространстве родительского узла (Group).
-//   Прямое изменение mesh.position работает в локальных координатах.
-//   Направление взрыва при этом берём из мировых координат — это правильно,
-//   так как именно мировые координаты определяют реальное расположение детали.
-
 const explodeSlider = document.getElementById('explodeSlider');
 const explodeVal    = document.getElementById('explodeVal');
 const explodeRow    = document.getElementById('explode-row');
-let explodeMaxDist  = 1;   // максимальное смещение в единицах сцены
+let explodeMaxDist  = 1;
 
 function initExplode(modelSize) {
-  // Масштаб взрыва: детали расходятся на 1.2 размера модели максимум
   explodeMaxDist = modelSize * 1.2;
-
   meshes.forEach(mesh => {
-    // Мировой центр bbox меша (точнее чем getWorldPosition — учитывает геометрию)
     const worldBox    = new THREE.Box3().setFromObject(mesh);
     const worldCenter = worldBox.getCenter(new THREE.Vector3());
-
-    // Направление взрыва: от центра сборки к центру меша
     const dir = worldCenter.clone();
-    if (dir.lengthSq() < 1e-8) dir.set(0, 1, 0);  // fallback: вверх
+    if (dir.lengthSq() < 1e-8) dir.set(0,1,0);
     dir.normalize();
-
-    // Исходная локальная позиция — запоминаем ДО любых смещений
     mesh.userData.explodeOriginLocal = mesh.position.clone();
     mesh.userData.explodeDir         = dir;
   });
 }
 
 function applyExplode(t) {
-  // t = 0..1
-  // Смещение в мировых единицах, но применяем в локальных.
-  // Для большинства GLB-файлов parent — это Group без доп. scale/rotation,
-  // поэтому мировые и локальные единицы совпадают.
-  // Если нет — нужно проецировать вектор через parentWorldInverse, но это редкий случай.
   meshes.forEach(mesh => {
     if (!mesh.userData.explodeOriginLocal) return;
     mesh.position.copy(mesh.userData.explodeOriginLocal)
@@ -385,14 +467,14 @@ function applyExplode(t) {
 explodeSlider.addEventListener('input', () => {
   const t = Number(explodeSlider.value);
   applyExplode(t);
-  explodeVal.textContent = Math.round(t * 100) + '%';
+  explodeVal.textContent = Math.round(t*100) + '%';
 });
 
 // ── Camera animation ──────────────────────────────────────────────────────────
 function animateCameraTo(targetPos, targetUp, onDone) {
   if (cameraAnim) { cameraAnim.cancelled=true; }
-  const anim = {cancelled:false};
-  cameraAnim = anim;
+  const anim={cancelled:false};
+  cameraAnim=anim;
   const DURATION=550, startTime=performance.now();
   const fromPos=perspCam.position.clone(), fromUp=perspCam.up.clone();
   const fromUpQ=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),fromUp.clone().normalize());
@@ -403,14 +485,14 @@ function animateCameraTo(targetPos, targetUp, onDone) {
   const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
   controls.enabled=false;
   function step(){
-    if (anim.cancelled){ controls.enabled=true; return; }
+    if (anim.cancelled){controls.enabled=true;return;}
     const raw=Math.min((performance.now()-startTime)/DURATION,1), t=ease(raw);
     perspCam.position.copy(new THREE.Vector3(0,0,1).applyQuaternion(posFromQ.clone().slerp(posToQ,t)).multiplyScalar(dist));
     perspCam.up.set(0,1,0).applyQuaternion(fromUpQ.clone().slerp(toUpQ,t)).normalize();
     perspCam.lookAt(0,0,0); perspCam.updateProjectionMatrix();
     if (isOrtho) applyProjection();
     controls.target.set(0,0,0);
-    if (raw<1){ requestAnimationFrame(step); }
+    if (raw<1){requestAnimationFrame(step);}
     else {
       perspCam.position.copy(toDir.multiplyScalar(dist));
       perspCam.up.copy(targetUp); perspCam.lookAt(0,0,0);
@@ -423,65 +505,41 @@ function animateCameraTo(targetPos, targetUp, onDone) {
 }
 
 // ── Виды камеры ───────────────────────────────────────────────────────────────
-// Повторное нажатие на уже активную кнопку переворачивает вид на противоположный.
-// Состояние флипа хранится отдельно для каждой оси.
-const viewFlipped = { top: false, front: false, right: false };
-
-// Исходные подписи кнопок — восстанавливаем при сбросе
-const viewLabels = { top: 'ВЕРХ', front: 'ПЕРЕД', right: 'БОК' };
-
 function setCameraView(name) {
-  const box = perspCam.userData.modelBox; if (!box) return;
-  const sz  = new THREE.Vector3(); box.getSize(sz);
-  const dist = Math.max(sz.x, sz.y, sz.z) * 2.2;
+  const box=perspCam.userData.modelBox; if (!box) return;
+  const sz=new THREE.Vector3(); box.getSize(sz);
+  const dist=Math.max(sz.x,sz.y,sz.z)*2.2;
 
-  // Если нажата уже активная кнопка — флипаем направление
-  if (activeView === name) viewFlipped[name] = !viewFlipped[name];
-  else viewFlipped[name] = false;   // сброс флипа при смене вида
+  if (activeView===name) viewFlipped[name]=!viewFlipped[name];
+  else viewFlipped[name]=false;
 
-  const flip = viewFlipped[name] ? -1 : 1;
-
+  const flip=viewFlipped[name]?-1:1;
   let dir, up, label;
-  if (name === 'top') {
-    dir   = new THREE.Vector3(0, flip, 0);
-    up    = new THREE.Vector3(0, 0, -1);
-    label = flip > 0 ? 'ВИД СВЕРХУ  ·  ⊥ XZ' : 'ВИД СНИЗУ  ·  ⊥ XZ';
-  } else if (name === 'front') {
-    dir   = new THREE.Vector3(0, 0, flip);
-    up    = new THREE.Vector3(0, 1, 0);
-    label = flip > 0 ? 'ВИД СПЕРЕДИ  ·  ⊥ XY' : 'ВИД СЗАДИ  ·  ⊥ XY';
-  } else {
-    dir   = new THREE.Vector3(flip, 0, 0);
-    up    = new THREE.Vector3(0, 1, 0);
-    label = flip > 0 ? 'ВИД СПРАВА  ·  ⊥ YZ' : 'ВИД СЛЕВА  ·  ⊥ YZ';
-  }
+  if (name==='top')        { dir=new THREE.Vector3(0,flip,0); up=new THREE.Vector3(0,0,-1); label=flip>0?'ВИД СВЕРХУ  ·  ⊥ XZ':'ВИД СНИЗУ  ·  ⊥ XZ'; }
+  else if (name==='front') { dir=new THREE.Vector3(0,0,flip); up=new THREE.Vector3(0,1,0);  label=flip>0?'ВИД СПЕРЕДИ  ·  ⊥ XY':'ВИД СЗАДИ  ·  ⊥ XY'; }
+  else                     { dir=new THREE.Vector3(flip,0,0); up=new THREE.Vector3(0,1,0);  label=flip>0?'ВИД СПРАВА  ·  ⊥ YZ':'ВИД СЛЕВА  ·  ⊥ YZ'; }
 
-  // Снимаем подсветку и восстанавливаем текст со всех кнопок
-  document.querySelectorAll('.view-btn').forEach(b => {
+  document.querySelectorAll('.view-btn').forEach(b=>{
     b.classList.remove('active');
-    const n = b.id.replace('btn-view-', '');
-    if (viewLabels[n]) b.textContent = viewLabels[n];
+    const n=b.id.replace('btn-view-','');
+    if (viewLabels[n]) b.textContent=viewLabels[n];
   });
-
-  const btn = document.getElementById('btn-view-' + name);
+  const btn=document.getElementById('btn-view-'+name);
   btn?.classList.add('active');
-  // Первое нажатие → ↺ («нажми ещё раз чтобы перевернуть»)
-  // После флипа → исходная подпись («сейчас перевёрнутый, нажми чтобы вернуть»)
-  if (btn) btn.textContent = viewFlipped[name] ? viewLabels[name] : '↺';
-
-  activeView = name;
+  if (btn) btn.textContent=viewFlipped[name]?viewLabels[name]:'↺';
+  activeView=name;
   if (isOrtho) applyProjection();
-  animateCameraTo(dir.multiplyScalar(dist), up, null);
-  setStatus(label, true);
+  animateCameraTo(dir.multiplyScalar(dist),up,null);
+  setStatus(label,true);
 }
 
-document.getElementById('btn-view-top').addEventListener('click',   () => setCameraView('top'));
-document.getElementById('btn-view-front').addEventListener('click',  () => setCameraView('front'));
-document.getElementById('btn-view-right').addEventListener('click',  () => setCameraView('right'));
+document.getElementById('btn-view-top').addEventListener('click',   ()=>setCameraView('top'));
+document.getElementById('btn-view-front').addEventListener('click',  ()=>setCameraView('front'));
+document.getElementById('btn-view-right').addEventListener('click',  ()=>setCameraView('right'));
 
 document.getElementById('btn-reset').addEventListener('click',()=>{
   clearActiveView();
-  animateCameraTo(defaultCameraPos, new THREE.Vector3(0,1,0), null);
+  animateCameraTo(defaultCameraPos,new THREE.Vector3(0,1,0),null);
   setStatus('КАМЕРА СБРОШЕНА',true);
 });
 document.getElementById('btn-ortho').addEventListener('click',()=>{
@@ -494,6 +552,13 @@ document.getElementById('btn-grid').addEventListener('click',()=>{
   grid.visible=!grid.visible;
   document.getElementById('btn-grid').classList.toggle('active',grid.visible);
 });
+document.getElementById('btn-bg').addEventListener('click',()=>{
+  isLightBg=!isLightBg;
+  scene.background=new THREE.Color(isLightBg?0xf2f2f2:0x0d0d0f);
+  document.body.style.background=isLightBg?'#f2f2f2':'#0d0d0f';
+  kl.intensity=isLightBg?.9:1.2; fl.intensity=isLightBg?.3:.4; rl.intensity=isLightBg?.2:.3;
+  document.getElementById('btn-bg').classList.toggle('active',isLightBg);
+});
 
 // ── UI refs ───────────────────────────────────────────────────────────────────
 const progressBar=document.getElementById('progress-bar'), statusEl=document.getElementById('status');
@@ -505,24 +570,44 @@ function setStatus(msg,hide=false){
 }
 
 // ── Load model ────────────────────────────────────────────────────────────────
-const initialModel = new URLSearchParams(location.search).get('model');
+const initialModel=new URLSearchParams(location.search).get('model');
 if (initialModel) loadModel(initialModel);
 else setStatus('НЕТ МОДЕЛИ — ПРОВЕРЬТЕ QR-КОД');
+
+function resetClipUI() {
+  ['xy','xz','yz'].forEach(axis => {
+    const s = clipState[axis];
+    s.active=false; s.inverted=false; s.value=0;
+    s.plane.normal.copy(AXIS_NORMALS[axis]);
+    s.plane.constant=0;
+    document.querySelector(`.axis-btn[data-axis="${axis}"]`)?.classList.remove('active');
+    document.getElementById('clip-row-'+axis).style.display='none';
+    const sl=document.getElementById('clipSlider-'+axis);
+    const vl=document.getElementById('sliderVal-'+axis);
+    if (sl) sl.value=0;
+    if (vl) vl.textContent='0.0';
+    const inv=document.querySelector(`.invert-btn[data-axis="${axis}"]`);
+    if (inv){inv.style.color='';inv.style.borderColor='';}
+    const tr=document.getElementById('toggleTrack-'+axis);
+    tr?.classList.remove('on');
+    showPlaneVis[axis]=false;
+    if (planeMeshes[axis]) planeMeshes[axis].visible=false;
+  });
+}
 
 function loadModel(src) {
   meshes.forEach(m=>{try{m.geometry.dispose();m.material.dispose();}catch(e){}});
   edgeObjects.forEach(e=>{try{e.geometry.dispose();e.material.dispose();}catch(e){}});
   meshes=[]; edgeObjects=[];
   scene.children.filter(c=>c.userData.isModel).forEach(c=>scene.remove(c));
-  if (planeMesh){scene.remove(planeMesh);planeMesh=null;}
 
-  document.querySelectorAll('.axis-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelector('.axis-btn[data-axis="none"]').classList.add('active');
-  clipActive=false; clipRow.style.display='none';
+  // Удаляем старые визуальные плоскости
+  Object.values(planeMeshes).forEach(pm=>{scene.remove(pm); pm.geometry.dispose(); pm.material.dispose();});
+  planeMeshes={};
 
-  // Сброс взрыва
+  resetClipUI();
+
   explodeSlider.value=0; explodeVal.textContent='0%'; explodeRow.style.display='none';
-
   controlsPanel.classList.add('disabled');
   errorEl.style.display='none'; progressBar.style.width='0%';
   setStatus('ЗАГРУЗКА...');
@@ -552,31 +637,29 @@ function loadModel(src) {
       const maxDim=Math.max(size.x,size.y,size.z);
 
       model.position.sub(center);
-
-      // Обязательно обновляем матрицы ПОСЛЕ центрирования —
-      // initExplode читает мировые позиции через bbox каждого меша
       scene.updateMatrixWorld(true);
 
       dimsEl.textContent=`${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}`;
       grid.position.y=box.min.y-center.y;
-
       perspCam.userData.modelBox=new THREE.Box3(box.min.clone().sub(center),box.max.clone().sub(center));
 
-      // Explode доступен только если в файле несколько отдельных мешей
-      if (meshes.length>1) {
-        initExplode(maxDim);
-        explodeRow.style.display='flex';
-      }
+      // Создаём визуальную плоскость для каждой оси
+      const pSize=maxDim*1.5;
+      const pMat=new THREE.MeshBasicMaterial({color:0x4f8ef7,transparent:true,opacity:.1,side:THREE.DoubleSide,depthWrite:false});
+      const rotations={xy:[0,0,0], xz:[Math.PI/2,0,0], yz:[0,Math.PI/2,0]};
+      ['xy','xz','yz'].forEach(axis=>{
+        const pm=new THREE.Mesh(new THREE.PlaneGeometry(pSize,pSize), pMat.clone());
+        pm.rotation.set(...rotations[axis]);
+        pm.visible=false;
+        scene.add(pm);
+        planeMeshes[axis]=pm;
 
-      const planeSize=maxDim*1.5;
-      planeMesh=new THREE.Mesh(
-        new THREE.PlaneGeometry(planeSize,planeSize),
-        new THREE.MeshBasicMaterial({color:0x4f8ef7,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false})
-      );
-      planeMesh.visible=false; scene.add(planeMesh);
+        // Настраиваем диапазон слайдеров
+        const sl=document.getElementById('clipSlider-'+axis);
+        if (sl){sl.min=-maxDim/2; sl.max=maxDim/2; sl.step=maxDim/400; sl.value=0;}
+      });
 
-      const half=maxDim/2;
-      clipSlider.min=-half; clipSlider.max=half; clipSlider.step=maxDim/400; clipSlider.value=0;
+      if (meshes.length>1){initExplode(maxDim); explodeRow.style.display='flex';}
 
       const dist=maxDim*2.2;
       defaultCameraPos.set(dist*.7,dist*.5,dist); defaultTarget.set(0,0,0);
@@ -590,9 +673,12 @@ function loadModel(src) {
       setStatus(meshes.length>1?`ГОТОВО · ${meshes.length} ДЕТАЛЕЙ`:'ГОТОВО',true);
     },
     (xhr)=>{
+      // FIX: xhr.total может быть 0 или некорректным — ограничиваем 99%
+      // чтобы прогресс не перевалил за 100% до вызова onLoad
       if (xhr.total>0){
-        const pct=(xhr.loaded/xhr.total*100).toFixed(0);
-        progressBar.style.width=pct+'%'; setStatus(`ЗАГРУЗКА ${pct}%`);
+        const pct=Math.min(Math.round(xhr.loaded/xhr.total*100), 99);
+        progressBar.style.width=pct+'%';
+        setStatus(`ЗАГРУЗКА ${pct}%`);
       }
     },
     (err)=>{
@@ -604,22 +690,19 @@ function loadModel(src) {
   );
 }
 
-document.getElementById('btn-bg').addEventListener('click', () => {
-  isLightBg = !isLightBg;
-  scene.background = new THREE.Color(isLightBg ? 0xf2f2f2 : 0x0d0d0f);
-  document.body.style.background = isLightBg ? '#f2f2f2' : '#0d0d0f';
-  // немного убираем интенсивность lights на светлом фоне — модель не пересвечивается
-  kl.intensity = isLightBg ? 0.9 : 1.2;
-  fl.intensity = isLightBg ? 0.3 : 0.4;
-  rl.intensity = isLightBg ? 0.2 : 0.3;
-  document.getElementById('btn-bg').classList.toggle('active', isLightBg);
-});
-
 // ── Animate ───────────────────────────────────────────────────────────────────
 function animate(){
   requestAnimationFrame(animate);
   if (isOrtho) applyProjection();
-  if (planeMesh&&clipActive) planeMesh.position.copy(clipPlane.normal).multiplyScalar(-clipPlane.constant);
+
+  // Двигаем визуальные плоскости вслед за слайдерами
+  ['xy','xz','yz'].forEach(axis=>{
+    const pm=planeMeshes[axis];
+    if (!pm||!clipState[axis].active) return;
+    const s=clipState[axis];
+    pm.position.copy(s.plane.normal).multiplyScalar(-s.plane.constant);
+  });
+
   controls.update();
   renderer.render(scene,camera);
 }
