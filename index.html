@@ -156,6 +156,12 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <button class="axis-btn" data-axis="xz">XZ</button>
       <button class="axis-btn" data-axis="yz">YZ</button>
     </div>
+    <!--
+      Режим И: показывает пересечение — часть модели по одну сторону от ВСЕХ плоскостей (1/4, 1/8)
+      Режим ИЛИ: показывает объединение — часть модели по одну сторону хотя бы от ОДНОЙ плоскости (3/4, 7/8)
+      Реализуется через material.clipIntersection = true/false
+    -->
+    <button class="mode-btn" id="btn-clip-mode" title="Режим среза: И (пересечение) / ИЛИ (объединение)" style="display:none;">И</button>
   </div>
 
   <!-- Слайдер XY -->
@@ -273,11 +279,28 @@ function getActivePlanes() {
   return Object.values(clipState).filter(s => s.active).map(s => s.plane);
 }
 
-// Применяет актуальный набор плоскостей ко всем мешам и рёбрам
+// clipIntersection = false → режим И (AND): видно только пересечение (1/4, 1/8 модели)
+// clipIntersection = true  → режим ИЛИ (OR): видно объединение (3/4, 7/8 модели)
+// Переключается кнопкой «И/ИЛИ» — появляется когда активны 2+ плоскости
+let clipIntersectionMode = false;
+
+// Применяет актуальный набор плоскостей и режим ко всем мешам и рёбрам
 function updateClippingPlanes() {
-  const planes = getActivePlanes();
-  meshes.forEach(m => { m.material.clippingPlanes = planes; });
-  edgeObjects.forEach(e => { e.material.clippingPlanes = planes; });
+  const planes       = getActivePlanes();
+  const activeCount  = planes.length;
+
+  // Кнопка режима видна только при 2+ активных плоскостях
+  const modeBtn = document.getElementById('btn-clip-mode');
+  modeBtn.style.display = activeCount >= 2 ? '' : 'none';
+
+  meshes.forEach(m => {
+    m.material.clippingPlanes     = planes;
+    m.material.clipIntersection   = clipIntersectionMode;
+  });
+  edgeObjects.forEach(e => {
+    e.material.clippingPlanes     = planes;
+    e.material.clipIntersection   = clipIntersectionMode;
+  });
 }
 
 // Обновляет constant плоскости с учётом инверсии
@@ -424,6 +447,16 @@ document.querySelectorAll('[data-axis-plane]').forEach(wrap => {
     track?.classList.toggle('on', showPlaneVis[axis]);
     if (planeMeshes[axis]) planeMeshes[axis].visible = showPlaneVis[axis] && clipState[axis].active;
   });
+});
+
+// ── Переключатель режима среза И / ИЛИ ───────────────────────────────────────
+document.getElementById('btn-clip-mode').addEventListener('click', () => {
+  clipIntersectionMode = !clipIntersectionMode;
+  const btn = document.getElementById('btn-clip-mode');
+  btn.textContent = clipIntersectionMode ? 'ИЛИ' : 'И';
+  btn.classList.toggle('active', clipIntersectionMode);
+  updateClippingPlanes();
+  setStatus(clipIntersectionMode ? 'РЕЖИМ: ОБЪЕДИНЕНИЕ (3/4)' : 'РЕЖИМ: ПЕРЕСЕЧЕНИЕ (1/4)', true);
 });
 
 // ── Render mode ───────────────────────────────────────────────────────────────
@@ -575,6 +608,11 @@ if (initialModel) loadModel(initialModel);
 else setStatus('НЕТ МОДЕЛИ — ПРОВЕРЬТЕ QR-КОД');
 
 function resetClipUI() {
+  clipIntersectionMode = false;
+  const modeBtn = document.getElementById('btn-clip-mode');
+  modeBtn.textContent = 'И';
+  modeBtn.classList.remove('active');
+  modeBtn.style.display = 'none';
   ['xy','xz','yz'].forEach(axis => {
     const s = clipState[axis];
     s.active=false; s.inverted=false; s.value=0;
