@@ -727,7 +727,7 @@ function resetClipUI() {
   document.getElementById('btn-clip-or').classList.remove('active');
   ['xy','xz','yz'].forEach(axis => {
     const s = clipState[axis];
-    s.active=false; s.inverted=false; s.value=0;
+    s.active=false; s.inverted=true; s.value=0;
     s.plane.normal.copy(AXIS_NORMALS[axis]);
     s.plane.constant=0;
     document.querySelector(`.axis-btn[data-axis="${axis}"]`)?.classList.remove('active');
