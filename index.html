@@ -341,9 +341,9 @@ const AXIS_NORMALS = {
 };
 
 const clipState = {
-  xy: { plane: new THREE.Plane(new THREE.Vector3(0,0,1), 0), active:false, inverted:false, value:0 },
-  xz: { plane: new THREE.Plane(new THREE.Vector3(0,1,0), 0), active:false, inverted:false, value:0 },
-  yz: { plane: new THREE.Plane(new THREE.Vector3(1,0,0), 0), active:false, inverted:false, value:0 },
+  xy: { plane: new THREE.Plane(new THREE.Vector3(0,0,1), 0), active:false, inverted:true, value:0 },
+  xz: { plane: new THREE.Plane(new THREE.Vector3(0,1,0), 0), active:false, inverted:true, value:0 },
+  yz: { plane: new THREE.Plane(new THREE.Vector3(1,0,0), 0), active:false, inverted:true, value:0 },
 };
 
 // Возвращает массив активных плоскостей для передачи в material.clippingPlanes
