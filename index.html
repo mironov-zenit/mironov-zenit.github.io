@@ -230,14 +230,14 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   <div class="ctrl-row" id="clip-mode-row" style="display:none;">
     <span class="ctrl-label">Режим</span>
     <div class="mode-group">
-      <button class="mode-btn active" id="btn-clip-and">1/4</button>
-      <button class="mode-btn"        id="btn-clip-or" >3/4</button>
+      <button class="mode-btn active" id="btn-clip-and">И — 1/4</button>
+      <button class="mode-btn"        id="btn-clip-or" >ИЛИ — 3/4</button>
     </div>
   </div>
 
-  <!-- Слайдер XY -->
+  <!-- Слайдер XY — красный -->
   <div class="ctrl-row clip-slider-row" id="clip-row-xy" style="display:none;">
-    <span class="ctrl-label" style="font-size:9px;color:var(--accent);">XY</span>
+    <span class="ctrl-label" style="font-size:9px;color:#ff3333;">XY</span>
     <div class="slider-wrap">
       <input type="range" id="clipSlider-xy">
       <span class="slider-val" id="sliderVal-xy">0.0</span>
@@ -249,9 +249,9 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
     </label>
   </div>
 
-  <!-- Слайдер XZ -->
+  <!-- Слайдер XZ — синий -->
   <div class="ctrl-row clip-slider-row" id="clip-row-xz" style="display:none;">
-    <span class="ctrl-label" style="font-size:9px;color:var(--accent);">XZ</span>
+    <span class="ctrl-label" style="font-size:9px;color:#4f8ef7;">XZ</span>
     <div class="slider-wrap">
       <input type="range" id="clipSlider-xz">
       <span class="slider-val" id="sliderVal-xz">0.0</span>
@@ -263,9 +263,9 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
     </label>
   </div>
 
-  <!-- Слайдер YZ -->
+  <!-- Слайдер YZ — зелёный -->
   <div class="ctrl-row clip-slider-row" id="clip-row-yz" style="display:none;">
-    <span class="ctrl-label" style="font-size:9px;color:var(--accent);">YZ</span>
+    <span class="ctrl-label" style="font-size:9px;color:#33cc66;">YZ</span>
     <div class="slider-wrap">
       <input type="range" id="clipSlider-yz">
       <span class="slider-val" id="sliderVal-yz">0.0</span>
@@ -793,12 +793,15 @@ function loadModel(src) {
       grid.position.y=box.min.y-center.y;
       perspCam.userData.modelBox=new THREE.Box3(box.min.clone().sub(center),box.max.clone().sub(center));
 
-      // Создаём визуальную плоскость для каждой оси
+      // Создаём визуальную плоскость для каждой оси — у каждой свой цвет
       const pSize=maxDim*1.5;
-      const pMat=new THREE.MeshBasicMaterial({color:0x4f8ef7,transparent:true,opacity:.1,side:THREE.DoubleSide,depthWrite:false});
+      const planeColors={xy:0xff3333, xz:0x4f8ef7, yz:0x33cc66};
       const rotations={xy:[0,0,0], xz:[Math.PI/2,0,0], yz:[0,Math.PI/2,0]};
       ['xy','xz','yz'].forEach(axis=>{
-        const pm=new THREE.Mesh(new THREE.PlaneGeometry(pSize,pSize), pMat.clone());
+        const pm=new THREE.Mesh(
+          new THREE.PlaneGeometry(pSize,pSize),
+          new THREE.MeshBasicMaterial({color:planeColors[axis],transparent:true,opacity:.1,side:THREE.DoubleSide,depthWrite:false})
+        );
         pm.rotation.set(...rotations[axis]);
         pm.visible=false;
         scene.add(pm);
