@@ -187,6 +187,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
       <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху / снизу — повторное нажатие переворачивает">ВЕРХ</button>
       <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди / сзади — повторное нажатие переворачивает">ПЕРЕД</button>
       <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа / слева — повторное нажатие переворачивает">БОК</button>
+      <button class="tb-btn" id="btn-fs" title="Полноэкранный режим">⛶</button>
     </div>
   </div>
 </div>
@@ -229,8 +230,8 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   <div class="ctrl-row" id="clip-mode-row" style="display:none;">
     <span class="ctrl-label">Режим</span>
     <div class="mode-group">
-      <button class="mode-btn active" id="btn-clip-and">И — 1/4</button>
-      <button class="mode-btn"        id="btn-clip-or" >ИЛИ — 3/4</button>
+      <button class="mode-btn active" id="btn-clip-and">1/4</button>
+      <button class="mode-btn"        id="btn-clip-or" >3/4</button>
     </div>
   </div>
 
@@ -529,6 +530,34 @@ function setClipMode(isOr) {
 }
 document.getElementById('btn-clip-and').addEventListener('click', () => setClipMode(false));
 document.getElementById('btn-clip-or').addEventListener('click',  () => setClipMode(true));
+
+// ── Полноэкранный режим ───────────────────────────────────────────────────────
+// Fullscreen API работает на всех современных браузерах включая iOS Safari 16.4+
+// На более старых iOS Safari полноэкранного API нет — там просто ничего не происходит,
+// кнопка не ломает остальное.
+document.getElementById('btn-fs').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-fs');
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  } catch(e) {
+    // iOS Safari не поддерживает Fullscreen API — молча игнорируем
+  }
+});
+
+// Синхронизируем иконку и состояние кнопки с реальным состоянием fullscreen
+// (пользователь может выйти через Esc — нужно отследить)
+document.addEventListener('fullscreenchange', () => {
+  const btn       = document.getElementById('btn-fs');
+  const isFs      = !!document.fullscreenElement;
+  btn.textContent = isFs ? '✕' : '⛶';
+  btn.classList.toggle('active', isFs);
+  // При входе/выходе из fullscreen размер canvas меняется — пересчитываем
+  onResize();
+});
 
 // ── Сворачивание панелей ──────────────────────────────────────────────────────
 document.getElementById('btn-toolbar-toggle').addEventListener('click', () => {
