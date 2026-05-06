@@ -377,7 +377,7 @@ function updateClippingPlanes() {
 // Обновляет constant плоскости с учётом инверсии
 function updatePlaneConstant(axis) {
   const s = clipState[axis];
-  s.plane.constant = s.inverted ? -s.value : s.value;
+  s.plane.constant =  ? -s.value : s.value;
 }
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
@@ -460,7 +460,7 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
     } else {
       // Включаем эту ось
       s.active   = true;
-      s.inverted = false;
+      s.inverted = true;
       s.value    = 0;
       s.plane.normal.copy(AXIS_NORMALS[axis]);
       s.plane.constant = 0;
