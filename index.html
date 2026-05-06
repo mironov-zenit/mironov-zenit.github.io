@@ -462,7 +462,8 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
       s.active   = true;
       s.inverted = true;
       s.value    = 0;
-      s.plane.normal.copy(AXIS_NORMALS[axis]);
+      // Копируем базовую нормаль и сразу инвертируем — иначе направление не применится
+      s.plane.normal.copy(AXIS_NORMALS[axis]).multiplyScalar(-1);
       s.plane.constant = 0;
 
       // Сбрасываем слайдер и подпись
@@ -732,7 +733,7 @@ function resetClipUI() {
   ['xy','xz','yz'].forEach(axis => {
     const s = clipState[axis];
     s.active=false; s.inverted=true; s.value=0;
-    s.plane.normal.copy(AXIS_NORMALS[axis]);
+    s.plane.normal.copy(AXIS_NORMALS[axis]).multiplyScalar(-1);
     s.plane.constant=0;
     document.querySelector(`.axis-btn[data-axis="${axis}"]`)?.classList.remove('active');
     document.getElementById('clip-row-'+axis).style.display='none';
