@@ -174,21 +174,32 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
 </div>
 <div id="status" class="panel">ЗАГРУЗКА...</div>
 <div id="toolbar" class="panel">
-  <div class="tb-group">
-    <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
-    <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
-    <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
-    <button class="tb-btn" id="btn-bg" title="Светлый / тёмный фон">◐</button>
-  </div>
-  <div class="tb-divider"></div>
-  <div class="tb-group">
-    <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху / снизу — повторное нажатие переворачивает">ВЕРХ</button>
-    <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди / сзади — повторное нажатие переворачивает">ПЕРЕД</button>
-    <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа / слева — повторное нажатие переворачивает">БОК</button>
+  <button id="btn-toolbar-toggle" title="Свернуть / развернуть">▲</button>
+  <div id="toolbar-body">
+    <div class="tb-group">
+      <button class="tb-btn" id="btn-reset" title="Сбросить камеру">⌂</button>
+      <button class="tb-btn" id="btn-ortho" title="Ортогональная проекция">⊡</button>
+      <button class="tb-btn" id="btn-grid" title="Сетка пола">⊞</button>
+      <button class="tb-btn" id="btn-bg" title="Светлый / тёмный фон">◐</button>
+    </div>
+    <div class="tb-divider"></div>
+    <div class="tb-group">
+      <button class="tb-btn view-btn" id="btn-view-top"   title="Вид сверху / снизу — повторное нажатие переворачивает">ВЕРХ</button>
+      <button class="tb-btn view-btn" id="btn-view-front" title="Вид спереди / сзади — повторное нажатие переворачивает">ПЕРЕД</button>
+      <button class="tb-btn view-btn" id="btn-view-right" title="Вид справа / слева — повторное нажатие переворачивает">БОК</button>
+    </div>
   </div>
 </div>
 
 <div id="controls" class="panel disabled">
+
+  <!-- Заголовок: всегда виден, клик сворачивает/разворачивает -->
+  <div id="controls-header">
+    <span id="controls-header-label">Управление</span>
+    <button id="btn-controls-toggle" title="Свернуть / развернуть">▼</button>
+  </div>
+
+  <div id="controls-body">
 
   <div class="ctrl-row">
     <span class="ctrl-label">Вид</span>
@@ -274,6 +285,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
     </div>
   </div>
 
+  </div><!-- /controls-body -->
 </div>
 
 <div id="error">
@@ -517,6 +529,19 @@ function setClipMode(isOr) {
 }
 document.getElementById('btn-clip-and').addEventListener('click', () => setClipMode(false));
 document.getElementById('btn-clip-or').addEventListener('click',  () => setClipMode(true));
+
+// ── Сворачивание панелей ──────────────────────────────────────────────────────
+document.getElementById('btn-toolbar-toggle').addEventListener('click', () => {
+  const toolbar = document.getElementById('toolbar');
+  const btn     = document.getElementById('btn-toolbar-toggle');
+  toolbar.classList.toggle('collapsed');
+  btn.textContent = toolbar.classList.contains('collapsed') ? '▼' : '▲';
+});
+
+document.getElementById('controls-header').addEventListener('click', () => {
+  const panel = document.getElementById('controls');
+  panel.classList.toggle('collapsed');
+});
 
 // ── Render mode ───────────────────────────────────────────────────────────────
 document.querySelectorAll('.mode-btn').forEach(btn=>{
