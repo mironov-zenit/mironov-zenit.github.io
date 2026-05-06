@@ -377,7 +377,7 @@ function updateClippingPlanes() {
 // Обновляет constant плоскости с учётом инверсии
 function updatePlaneConstant(axis) {
   const s = clipState[axis];
-  s.plane.constant =  ? -s.value : s.value;
+  s.plane.constant = s.inverted ? -s.value : s.value;
 }
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
@@ -470,6 +470,10 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
       const valEl  = document.getElementById('sliderVal-'  + axis);
       if (slider) { slider.value = 0; }
       if (valEl)  { valEl.textContent = '0.0'; }
+
+      // Подсвечиваем кнопку инверсии оранжевым — инверсия активна по умолчанию
+      const inv = document.querySelector(`.invert-btn[data-axis="${axis}"]`);
+      if (inv) { inv.style.color='var(--danger)'; inv.style.borderColor='rgba(249,115,22,.4)'; }
 
       btn.classList.add('active');
       document.getElementById('clip-row-' + axis).style.display = 'flex';
@@ -737,7 +741,7 @@ function resetClipUI() {
     if (sl) sl.value=0;
     if (vl) vl.textContent='0.0';
     const inv=document.querySelector(`.invert-btn[data-axis="${axis}"]`);
-    if (inv){inv.style.color='';inv.style.borderColor='';}
+    if (inv){inv.style.color='var(--danger)';inv.style.borderColor='rgba(249,115,22,.4)';}
     const tr=document.getElementById('toggleTrack-'+axis);
     tr?.classList.remove('on');
     showPlaneVis[axis]=false;
