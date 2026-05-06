@@ -230,8 +230,8 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   <div class="ctrl-row" id="clip-mode-row" style="display:none;">
     <span class="ctrl-label">Режим</span>
     <div class="mode-group">
-      <button class="mode-btn active" id="btn-clip-and">И — 1/4</button>
-      <button class="mode-btn"        id="btn-clip-or" >ИЛИ — 3/4</button>
+      <button class="mode-btn active" id="btn-clip-and">1/4</button>
+      <button class="mode-btn"        id="btn-clip-or" >3/4</button>
     </div>
   </div>
 
@@ -798,14 +798,47 @@ function loadModel(src) {
       const planeColors={xy:0xff3333, xz:0x4f8ef7, yz:0x33cc66};
       const rotations={xy:[0,0,0], xz:[Math.PI/2,0,0], yz:[0,Math.PI/2,0]};
       ['xy','xz','yz'].forEach(axis=>{
+        const color=planeColors[axis];
+        const rot=rotations[axis];
+
+        // Полупрозрачная заливка
         const pm=new THREE.Mesh(
           new THREE.PlaneGeometry(pSize,pSize),
-          new THREE.MeshBasicMaterial({color:planeColors[axis],transparent:true,opacity:.1,side:THREE.DoubleSide,depthWrite:false})
+          new THREE.MeshBasicMaterial({color,transparent:true,opacity:.08,side:THREE.DoubleSide,depthWrite:false})
         );
-        pm.rotation.set(...rotations[axis]);
+        pm.rotation.set(...rot);
         pm.visible=false;
         scene.add(pm);
         planeMeshes[axis]=pm;
+
+        // Рамка по периметру — LineLoop из 4 углов плоскости
+        const h=pSize/2;
+        const borderGeo=new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-h,-h,0),
+          new THREE.Vector3( h,-h,0),
+          new THREE.Vector3( h, h,0),
+          new THREE.Vector3(-h, h,0),
+        ]);
+        const border=new THREE.LineLoop(
+          borderGeo,
+          new THREE.LineBasicMaterial({color, linewidth:2})
+        );
+        // Чуть выдвигаем вперёд чтобы не z-fighting с заливкой
+        border.position.z=0.001;
+        pm.add(border);   // прикрепляем к плоскости — двигаются вместе
+
+        // Крестообразные направляющие линии через центр — помогают
+        // визуально оценить где именно проходит плоскость
+        const guideGeo=new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-h,0,0), new THREE.Vector3(h,0,0),
+          new THREE.Vector3(0,-h,0), new THREE.Vector3(0,h,0),
+        ]);
+        const guide=new THREE.LineSegments(
+          guideGeo,
+          new THREE.LineBasicMaterial({color,transparent:true,opacity:.35})
+        );
+        guide.position.z=0.001;
+        pm.add(guide);
 
         // Настраиваем диапазон слайдеров
         const sl=document.getElementById('clipSlider-'+axis);
