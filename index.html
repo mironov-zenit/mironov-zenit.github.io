@@ -64,8 +64,18 @@ canvas { display:block; touch-action:none; -webkit-touch-callout:none; }
 .axis-btn:hover { color:var(--text); border-color:rgba(255,255,255,.2); }
 .axis-btn.active { background:rgba(79,142,247,.15); color:var(--accent); border-color:rgba(79,142,247,.4); }
 
-/* Строки срезов — по одной на каждую ось */
-.clip-axis-row { display:flex; flex-direction:column; gap:8px; }
+/* Строки срезов скрываются плавно — панель не прыгает */
+.clip-slider-row {
+  overflow: hidden;
+  max-height: 40px;
+  opacity: 1;
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+}
+.clip-slider-row.hidden {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
 
 .slider-wrap { flex:1; display:flex; align-items:center; gap:10px; }
 input[type=range] {
@@ -205,9 +215,9 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   <div class="ctrl-row">
     <span class="ctrl-label">Вид</span>
     <div class="mode-group">
-      <button class="mode-btn active" data-mode="solid">Обычный</button>
-      <button class="mode-btn" data-mode="edges">Рёбра</button>
-      <button class="mode-btn" data-mode="wireframe">Каркас</button>
+      <button class="mode-btn render-btn active" data-mode="solid">Обычный</button>
+      <button class="mode-btn render-btn" data-mode="edges">Рёбра</button>
+      <button class="mode-btn render-btn" data-mode="wireframe">Каркас</button>
     </div>
   </div>
 
@@ -230,13 +240,13 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   <div class="ctrl-row" id="clip-mode-row" style="display:none;">
     <span class="ctrl-label">Режим</span>
     <div class="mode-group">
-      <button class="mode-btn active" id="btn-clip-and">1/4</button>
-      <button class="mode-btn"        id="btn-clip-or" >3/4</button>
+      <button class="mode-btn active" id="btn-clip-and">И — 1/4</button>
+      <button class="mode-btn"        id="btn-clip-or" >ИЛИ — 3/4</button>
     </div>
   </div>
 
   <!-- Слайдер XY — красный -->
-  <div class="ctrl-row clip-slider-row" id="clip-row-xy" style="display:none;">
+  <div class="ctrl-row clip-slider-row hidden" id="clip-row-xy">
     <span class="ctrl-label" style="font-size:9px;color:#ff3333;">XY</span>
     <div class="slider-wrap">
       <input type="range" id="clipSlider-xy">
@@ -250,7 +260,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   </div>
 
   <!-- Слайдер XZ — синий -->
-  <div class="ctrl-row clip-slider-row" id="clip-row-xz" style="display:none;">
+  <div class="ctrl-row clip-slider-row hidden" id="clip-row-xz">
     <span class="ctrl-label" style="font-size:9px;color:#4f8ef7;">XZ</span>
     <div class="slider-wrap">
       <input type="range" id="clipSlider-xz">
@@ -264,7 +274,7 @@ input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%
   </div>
 
   <!-- Слайдер YZ — зелёный -->
-  <div class="ctrl-row clip-slider-row" id="clip-row-yz" style="display:none;">
+  <div class="ctrl-row clip-slider-row hidden" id="clip-row-yz">
     <span class="ctrl-label" style="font-size:9px;color:#33cc66;">YZ</span>
     <div class="slider-wrap">
       <input type="range" id="clipSlider-yz">
@@ -455,31 +465,27 @@ document.querySelectorAll('.axis-btn').forEach(btn => {
       // Выключаем эту ось
       s.active = false;
       btn.classList.remove('active');
-      document.getElementById('clip-row-' + axis).style.display = 'none';
+      document.getElementById('clip-row-' + axis).classList.add('hidden');
       if (planeMeshes[axis]) planeMeshes[axis].visible = false;
     } else {
       // Включаем эту ось
       s.active   = true;
       s.inverted = true;
       s.value    = 0;
-      // Копируем базовую нормаль и сразу инвертируем — иначе направление не применится
       s.plane.normal.copy(AXIS_NORMALS[axis]).multiplyScalar(-1);
       s.plane.constant = 0;
 
-      // Сбрасываем слайдер и подпись
       const slider = document.getElementById('clipSlider-' + axis);
       const valEl  = document.getElementById('sliderVal-'  + axis);
       if (slider) { slider.value = 0; }
       if (valEl)  { valEl.textContent = '0.0'; }
 
-      // Подсвечиваем кнопку инверсии оранжевым — инверсия активна по умолчанию
       const inv = document.querySelector(`.invert-btn[data-axis="${axis}"]`);
       if (inv) { inv.style.color='var(--danger)'; inv.style.borderColor='rgba(249,115,22,.4)'; }
 
       btn.classList.add('active');
-      document.getElementById('clip-row-' + axis).style.display = 'flex';
+      document.getElementById('clip-row-' + axis).classList.remove('hidden');
 
-      // Визуальная плоскость — если включена
       if (planeMeshes[axis] && showPlaneVis[axis]) planeMeshes[axis].visible = true;
     }
 
@@ -578,9 +584,9 @@ document.getElementById('controls-header').addEventListener('click', () => {
 });
 
 // ── Render mode ───────────────────────────────────────────────────────────────
-document.querySelectorAll('.mode-btn').forEach(btn=>{
+document.querySelectorAll('.render-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
-    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.render-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const mode=btn.dataset.mode;
     meshes.forEach(m=>{m.material.wireframe=(mode==='wireframe');});
@@ -736,7 +742,7 @@ function resetClipUI() {
     s.plane.normal.copy(AXIS_NORMALS[axis]).multiplyScalar(-1);
     s.plane.constant=0;
     document.querySelector(`.axis-btn[data-axis="${axis}"]`)?.classList.remove('active');
-    document.getElementById('clip-row-'+axis).style.display='none';
+    document.getElementById('clip-row-'+axis).classList.add('hidden');
     const sl=document.getElementById('clipSlider-'+axis);
     const vl=document.getElementById('sliderVal-'+axis);
     if (sl) sl.value=0;
