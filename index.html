@@ -364,7 +364,7 @@ function getActivePlanes() {
 // clipIntersection = false → режим И (AND): видно только пересечение (1/4, 1/8 модели)
 // clipIntersection = true  → режим ИЛИ (OR): видно объединение (3/4, 7/8 модели)
 // Переключается кнопкой «И/ИЛИ» — появляется когда активны 2+ плоскости
-let clipIntersectionMode = false;
+let clipIntersectionMode = true;
 
 // Применяет актуальный набор плоскостей и режим ко всем мешам и рёбрам
 function updateClippingPlanes() {
@@ -789,7 +789,7 @@ function loadModel(src) {
           new THREE.EdgesGeometry(child.geometry,15),
           new THREE.LineBasicMaterial({color:0x000000,clippingPlanes:[],transparent:true,opacity:.7})
         );
-        el.visible=false; child.add(el); edgeObjects.push(el);
+        el.visible=true; child.add(el); edgeObjects.push(el);
       });
 
       const box=new THREE.Box3().setFromObject(model);
