@@ -732,10 +732,10 @@ if (initialModel) loadModel(initialModel);
 else setStatus('НЕТ МОДЕЛИ — ПРОВЕРЬТЕ QR-КОД');
 
 function resetClipUI() {
-  clipIntersectionMode = false;
+  clipIntersectionMode = true;
   document.getElementById('clip-mode-row').style.display = 'none';
-  document.getElementById('btn-clip-and').classList.add('active');
-  document.getElementById('btn-clip-or').classList.remove('active');
+  document.getElementById('btn-clip-and').classList.remove('active');
+  document.getElementById('btn-clip-or').classList.add('active');
   ['xy','xz','yz'].forEach(axis => {
     const s = clipState[axis];
     s.active=false; s.inverted=true; s.value=0;
